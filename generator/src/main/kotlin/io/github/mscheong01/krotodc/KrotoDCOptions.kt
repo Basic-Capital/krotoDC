@@ -22,6 +22,18 @@ object KrotoDCOptions {
     var allFieldDefaults: Boolean = false
         private set
 
+    /**
+     * Where converter functions go. `message` (default) puts each top-level message's converters in its own
+     * subpackage; `dataClass` puts them in the data class package, which keeps the package count low.
+     */
+    var converterPackage: ConverterPackage = ConverterPackage.MESSAGE
+        private set
+
+    enum class ConverterPackage(val optionValue: String) {
+        MESSAGE("message"),
+        DATA_CLASS("dataClass")
+    }
+
     fun load(parameter: String) {
         val options = parameter.split(',')
             .map { it.trim() }
@@ -34,7 +46,13 @@ object KrotoDCOptions {
             require(key in knownOptions) { "Unknown krotoDC option '$key'. Known options: $knownOptions" }
         }
         allFieldDefaults = options["allFieldDefaults"]?.toBooleanStrict() ?: false
+        converterPackage = options["converterPackage"]?.let { value ->
+            ConverterPackage.entries.find { it.optionValue == value }
+                ?: throw IllegalArgumentException(
+                    "Unknown converterPackage '$value'. Known values: ${ConverterPackage.entries.map { it.optionValue }}"
+                )
+        } ?: ConverterPackage.MESSAGE
     }
 
-    private val knownOptions = setOf("allFieldDefaults")
+    private val knownOptions = setOf("allFieldDefaults", "converterPackage")
 }

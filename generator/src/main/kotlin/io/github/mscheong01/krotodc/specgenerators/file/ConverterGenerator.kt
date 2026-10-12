@@ -24,8 +24,8 @@ import io.github.mscheong01.krotodc.specgenerators.function.MessageToDataClassFu
 import io.github.mscheong01.krotodc.specgenerators.function.MessageToProtoFunctionGenerator
 import io.github.mscheong01.krotodc.specgenerators.function.ToJsonFunctionGenerator
 import io.github.mscheong01.krotodc.util.addAllImports
+import io.github.mscheong01.krotodc.util.converterPackage
 import io.github.mscheong01.krotodc.util.isPredefinedType
-import io.github.mscheong01.krotodc.util.krotoDCPackage
 
 class ConverterGenerator : FileSpecGenerator {
 
@@ -37,7 +37,7 @@ class ConverterGenerator : FileSpecGenerator {
     override fun generate(fileDescriptor: Descriptors.FileDescriptor): List<FileSpec> {
         val fileSpecs = mutableMapOf<String, FileSpec>()
         for (messageType in fileDescriptor.messageTypes) {
-            val packageValue = messageType.file.krotoDCPackage + '.' + messageType.name.lowercase()
+            val packageValue = messageType.converterPackage
             val fileBuilder = FileSpec
                 .builder(packageValue, "${messageType.name}Converters.kt")
             val (funSpecs, imports) = generateConvertersForMessageDescriptor(messageType)

@@ -42,8 +42,10 @@ object KrotoDCCodeGenerator {
                     Descriptors.FileDescriptor.buildFrom(file, deps.toTypedArray())
             }
 
-        fileNameToDescriptor.filterNot { (fileName, _) ->
-            fileName.startsWith("google/")
+        // Only generate the files protoc asks for; the rest of protoFileList are imports, generated elsewhere.
+        val filesToGenerate = request.fileToGenerateList.toSet()
+        fileNameToDescriptor.filter { (fileName, _) ->
+            fileName in filesToGenerate && !fileName.startsWith("google/")
         }.forEach { (_, descriptor) ->
             val responseBuilder = PluginProtos.CodeGeneratorResponse.newBuilder()
                 .setSupportedFeatures(PluginProtos.CodeGeneratorResponse.Feature.FEATURE_PROTO3_OPTIONAL_VALUE.toLong())

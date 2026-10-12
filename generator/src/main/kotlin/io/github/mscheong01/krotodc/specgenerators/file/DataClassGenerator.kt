@@ -239,7 +239,7 @@ class DataClassGenerator : FileSpecGenerator {
                     ?: throw IllegalStateException("Enum field $field does not have an enum type")
                 Pair(
                     enumType.protobufJavaTypeName,
-                    CodeWithImports.of("${enumType.protobufJavaTypeName.canonicalName}.values()[0]")
+                    CodeWithImports.of("${enumType.protobufJavaTypeName.canonicalName}.`${enumType.values.first().name}`")
                 )
             }
 

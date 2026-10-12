@@ -14,6 +14,8 @@
 package io.github.mscheong01.krotodc
 
 import com.example.defaultvaluestest.DefaultValuesTest
+import com.google.protobuf.compiler.PluginProtos
+import io.github.mscheong01.krotodc.specgenerators.file.ConverterGenerator
 import io.github.mscheong01.krotodc.specgenerators.file.DataClassGenerator
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.AfterEach
@@ -44,6 +46,66 @@ class KrotoDCOptionsTest {
         Assertions.assertThat(generatedDataClasses())
             .contains("intField: Int = 0")
             .contains("stringList: List<String> = listOf()")
+    }
+
+    @Test
+    fun `converters get a subpackage per message by default`() {
+        KrotoDCOptions.load("")
+        val packages = ConverterGenerator().generate(DefaultValuesTest.getDescriptor()).map { it.packageName }
+        Assertions.assertThat(packages).containsExactlyInAnyOrder(
+            "com.example.defaultvaluestest.krotodc.defaultvaluetest",
+            "com.example.defaultvaluestest.krotodc.defaultvaluenestedmessage"
+        )
+    }
+
+    @Test
+    fun `converterPackage=dataClass puts converters in the data class package`() {
+        KrotoDCOptions.load("converterPackage=dataClass")
+        val fileSpecs = ConverterGenerator().generate(DefaultValuesTest.getDescriptor())
+        Assertions.assertThat(fileSpecs.map { it.packageName }.toSet())
+            .containsExactly("com.example.defaultvaluestest.krotodc")
+        Assertions.assertThat(fileSpecs.joinToString("\n") { it.toString() })
+            .doesNotContain("import com.example.defaultvaluestest.krotodc.defaultvaluenestedmessage")
+    }
+
+    @Test
+    fun `unknown converterPackage is rejected`() {
+        assertThrows<IllegalArgumentException> { KrotoDCOptions.load("converterPackage=file") }
+    }
+
+    @Test
+    fun `only files in file_to_generate are generated`() {
+        val fileProto = DefaultValuesTest.getDescriptor().toProto()
+        val request = PluginProtos.CodeGeneratorRequest.newBuilder()
+            .addProtoFile(fileProto)
+            .build()
+        val out = java.io.ByteArrayOutputStream()
+        val stdout = System.out
+        System.setOut(java.io.PrintStream(out))
+        try {
+            KrotoDCCodeGenerator.generateCode(request)
+        } finally {
+            System.setOut(stdout)
+        }
+        Assertions.assertThat(PluginProtos.CodeGeneratorResponse.parseFrom(out.toByteArray()).fileList).isEmpty()
+    }
+
+    @Test
+    fun `files in file_to_generate are generated`() {
+        val fileProto = DefaultValuesTest.getDescriptor().toProto()
+        val request = PluginProtos.CodeGeneratorRequest.newBuilder()
+            .addProtoFile(fileProto)
+            .addFileToGenerate(fileProto.name)
+            .build()
+        val out = java.io.ByteArrayOutputStream()
+        val stdout = System.out
+        System.setOut(java.io.PrintStream(out))
+        try {
+            KrotoDCCodeGenerator.generateCode(request)
+        } finally {
+            System.setOut(stdout)
+        }
+        Assertions.assertThat(PluginProtos.CodeGeneratorResponse.parseFrom(out.toByteArray()).fileList).isNotEmpty()
     }
 
     @Test

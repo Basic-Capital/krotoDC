@@ -20,6 +20,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor
 import com.google.protobuf.Descriptors.FileDescriptor
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
+import io.github.mscheong01.krotodc.KrotoDCOptions
 import io.github.mscheong01.krotodc.import.Import
 import io.github.mscheong01.krotodc.predefinedtypes.HandledPreDefinedType
 import java.lang.reflect.Method
@@ -169,17 +170,27 @@ val Descriptor.converterImports: Set<Import>
         )
     }
 
+/**
+ * Package of the converter functions for this message: a subpackage per top-level message by default, or the data
+ * class package with `converterPackage=dataClass`.
+ */
+val Descriptor.converterPackage: String
+    get() = when (KrotoDCOptions.converterPackage) {
+        KrotoDCOptions.ConverterPackage.MESSAGE -> this.file.krotoDCPackage + '.' + this.simpleNames.first().lowercase()
+        KrotoDCOptions.ConverterPackage.DATA_CLASS -> this.file.krotoDCPackage
+    }
+
 val Descriptor.toProtoImport: Import
     get() {
         return Import(
-            this.file.krotoDCPackage + '.' + this.simpleNames.first().lowercase(),
+            this.converterPackage,
             listOf("toProto")
         )
     }
 val Descriptor.toDataClassImport: Import
     get() {
         return Import(
-            this.file.krotoDCPackage + '.' + this.simpleNames.first().lowercase(),
+            this.converterPackage,
             listOf("toDataClass")
         )
     }
