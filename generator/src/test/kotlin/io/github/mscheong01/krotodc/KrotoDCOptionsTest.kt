@@ -14,6 +14,8 @@
 package io.github.mscheong01.krotodc
 
 import com.example.defaultvaluestest.DefaultValuesTest
+import com.google.protobuf.DescriptorProtos
+import com.google.protobuf.Descriptors
 import com.google.protobuf.compiler.PluginProtos
 import io.github.mscheong01.krotodc.specgenerators.file.ConverterGenerator
 import io.github.mscheong01.krotodc.specgenerators.file.DataClassGenerator
@@ -66,6 +68,25 @@ class KrotoDCOptionsTest {
             .containsExactly("com.example.defaultvaluestest.krotodc")
         Assertions.assertThat(fileSpecs.joinToString("\n") { it.toString() })
             .doesNotContain("import com.example.defaultvaluestest.krotodc.defaultvaluenestedmessage")
+    }
+
+    @Test
+    fun `toJson keeps the let lambda on the same line however KotlinPoet wraps`() {
+        KrotoDCOptions.load("converterPackage=dataClass")
+        // The line before `{` is 99 chars for an 8-char message name; try a range of lengths around it.
+        val messages = (4..14).map { length ->
+            DescriptorProtos.DescriptorProto.newBuilder().setName("M" + "x".repeat(length - 1)).build()
+        }
+        val fileProto = DescriptorProtos.FileDescriptorProto.newBuilder()
+            .setName("wrap_test.proto")
+            .setPackage("wraptest")
+            .setSyntax("proto3")
+            .addAllMessageType(messages)
+            .build()
+        val fileDescriptor = Descriptors.FileDescriptor.buildFrom(fileProto, arrayOf())
+        val code = ConverterGenerator().generate(fileDescriptor).joinToString("\n") { it.toString() }
+        val letLines = code.lines().filter { "JsonFormat.printer().let" in it }
+        Assertions.assertThat(letLines).hasSize(messages.size).allMatch { "let { defaultPrinter ->" in it }
     }
 
     @Test

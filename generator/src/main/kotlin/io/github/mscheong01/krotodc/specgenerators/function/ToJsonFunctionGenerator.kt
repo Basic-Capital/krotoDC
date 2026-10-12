@@ -33,9 +33,10 @@ class ToJsonFunctionGenerator : FunSpecGenerator<Descriptor> {
                     .build()
             )
             .returns(String::class)
+        // `·` is KotlinPoet's non-breaking space: a line break between `let` and its lambda would not compile.
         functionBuilder.addCode(
             """
-                return JsonFormat.printer().let { defaultPrinter ->
+                return JsonFormat.printer().let·{·defaultPrinter·->
                         var printer = defaultPrinter
                         if (includeDefaultValues) {
                             printer = printer.alwaysPrintFieldsWithNoPresence().omittingInsignificantWhitespace()
