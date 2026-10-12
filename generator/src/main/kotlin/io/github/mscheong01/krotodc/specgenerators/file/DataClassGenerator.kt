@@ -35,6 +35,7 @@ import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import io.github.mscheong01.krotodc.KrotoDC
+import io.github.mscheong01.krotodc.KrotoDCOptions
 import io.github.mscheong01.krotodc.import.CodeWithImports
 import io.github.mscheong01.krotodc.import.Import
 import io.github.mscheong01.krotodc.import.TypeSpecsWithImports
@@ -123,7 +124,7 @@ class DataClassGenerator : FileSpecGenerator {
                                         it.jsonName,
                                         type
                                     ).apply {
-                                        if (it.isKrotoDCOptional) {
+                                        if (it.isKrotoDCOptional || KrotoDCOptions.allFieldDefaults) {
                                             defaultValue(default.code)
                                         }
                                     }.build()
@@ -191,7 +192,7 @@ class DataClassGenerator : FileSpecGenerator {
                             }
                         }
                         .apply {
-                            if (field.isKrotoDCOptional) {
+                            if (field.isKrotoDCOptional || KrotoDCOptions.allFieldDefaults) {
                                 defaultValue(default.code)
                             }
                         }.build()

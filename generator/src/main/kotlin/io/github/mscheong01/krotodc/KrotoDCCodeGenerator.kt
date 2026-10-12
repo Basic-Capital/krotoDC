@@ -29,6 +29,7 @@ object KrotoDCCodeGenerator {
     )
 
     fun generateCode(request: PluginProtos.CodeGeneratorRequest) {
+        KrotoDCOptions.load(request.parameter)
         val fileNameToDescriptor = mutableMapOf<String, Descriptors.FileDescriptor>()
         request.protoFileList
             .toList()
