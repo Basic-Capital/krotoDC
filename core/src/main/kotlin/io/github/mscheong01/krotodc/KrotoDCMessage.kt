@@ -26,6 +26,9 @@ interface KrotoDCMessage<P : Message> {
     /** Canonical protobuf JSON. With [includeDefaultValues], fields without presence are printed and whitespace is omitted. */
     fun toJson(includeDefaultValues: Boolean = false): String
 
+    /** Protobuf JSON printed as [options] say, e.g. with proto field names or compact without defaults. */
+    fun toJson(options: KrotoJsonOptions): String = KrotoJson.print(toProto(), options)
+
     /** Protobuf binary wire format, identical to `toProto().toByteArray()`. */
     fun toByteArray(): ByteArray = toProto().toByteArray()
 
@@ -37,7 +40,12 @@ interface KrotoDCMessage<P : Message> {
 interface KrotoDCMessageCompanion<D : KrotoDCMessage<P>, P : Message> {
     fun fromProto(proto: P): D
 
+    /** Parses protobuf JSON, ignoring unknown fields. */
     fun fromJson(json: String): D
+
+    /** Parses protobuf JSON as [options] say; [KrotoJsonParseOptions.STRICT] rejects unknown fields. */
+    fun fromJson(json: String, options: KrotoJsonParseOptions): D =
+        fromProtoUnchecked(KrotoJson.merge(json, newProtoBuilder(), options).build())
 
     /** Parses protobuf binary wire format. Throws [com.google.protobuf.InvalidProtocolBufferException] on malformed input. */
     fun parseFrom(bytes: ByteArray): D
