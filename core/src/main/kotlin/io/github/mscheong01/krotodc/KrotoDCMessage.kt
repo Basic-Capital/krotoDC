@@ -14,6 +14,7 @@
 package io.github.mscheong01.krotodc
 
 import com.google.protobuf.ByteString
+import com.google.protobuf.Descriptors
 import com.google.protobuf.Message
 
 /**
@@ -54,6 +55,9 @@ interface KrotoDCMessageCompanion<D : KrotoDCMessage<P>, P : Message> {
     fun parseFrom(bytes: ByteString): D
 
     fun newProtoBuilder(): Message.Builder
+
+    /** The message's protobuf descriptor. `descriptor.file` is the descriptor of the `.proto` file that declares it. */
+    val descriptor: Descriptors.Descriptor
 
     /** [fromProto] for callers that only know the message type at runtime. */
     @Suppress("UNCHECKED_CAST")

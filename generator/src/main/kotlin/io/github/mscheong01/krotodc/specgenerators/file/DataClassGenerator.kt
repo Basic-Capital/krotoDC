@@ -232,7 +232,7 @@ class DataClassGenerator : FileSpecGenerator {
 
     /**
      * Makes the data class a [KrotoDCMessage] with `toProto`/`toJson` members, and its companion a
-     * [KrotoDCMessageCompanion] that delegates to the top-level `toDataClass` extension.
+     * [KrotoDCMessageCompanion] that delegates to the top-level `toDataClass` extension and exposes the descriptor.
      */
     private fun addMemberConverters(
         messageDescriptor: Descriptor,
@@ -286,6 +286,12 @@ class DataClassGenerator : FileSpecGenerator {
                     .addModifiers(KModifier.OVERRIDE)
                     .returns(protoType.nestedClass("Builder"))
                     .addStatement("return %T.newBuilder()", protoType)
+                    .build()
+            )
+            .addProperty(
+                PropertySpec.builder("descriptor", Descriptor::class)
+                    .addModifiers(KModifier.OVERRIDE)
+                    .getter(FunSpec.getterBuilder().addStatement("return %T.getDescriptor()", protoType).build())
                     .build()
             )
             .build()
