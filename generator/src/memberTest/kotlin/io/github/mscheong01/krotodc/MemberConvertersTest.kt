@@ -18,6 +18,9 @@ import com.example.membertest.MemberTest.Color
 import com.example.membertest.krotodc.Empty
 import com.example.membertest.krotodc.Person
 import com.example.membertest.krotodc.person.toDataClass
+import com.google.protobuf.ByteString
+import com.google.protobuf.InvalidProtocolBufferException
+import com.google.protobuf.Timestamp
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
@@ -79,6 +82,80 @@ class MemberConvertersTest {
             com.google.protobuf.util.JsonFormat.printer().alwaysPrintFieldsWithNoPresence()
                 .omittingInsignificantWhitespace().print(person.toProto())
         )
+    }
+
+    /** The same message as [person], built with the protoc-java builder rather than through krotoDC. */
+    private val javaPerson: MemberTest.Person = MemberTest.Person.newBuilder()
+        .setName("Ada")
+        .setAge(36)
+        .setNickname("countess")
+        .setHome(MemberTest.Person.Address.newBuilder().setCity("London"))
+        .addPrevious(MemberTest.Person.Address.newBuilder().setCity("Marylebone"))
+        .putByLabel("work", MemberTest.Person.Address.newBuilder().setCity("Ockham").build())
+        .putCounters("letters", 3L)
+        .setFavoriteColor(Color.BLUE)
+        .setBorn(Timestamp.newBuilder().setSeconds(person.toProto().born.seconds))
+        .setMailing(MemberTest.Person.Address.newBuilder().setCity("Somerset"))
+        .build()
+
+    @Test
+    fun `toByteArray and toByteString round trip through parseFrom`() {
+        Assertions.assertThat(Person.parseFrom(person.toByteArray())).isEqualTo(person)
+        Assertions.assertThat(Person.parseFrom(person.toByteString())).isEqualTo(person)
+        val address = Person.Address(city = "Paris")
+        Assertions.assertThat(Person.Address.parseFrom(address.toByteArray())).isEqualTo(address)
+        Assertions.assertThat(Person.parseFrom(Person().toByteArray())).isEqualTo(Person())
+    }
+
+    @Test
+    fun `binary encoding is byte identical to the java proto encoding`() {
+        Assertions.assertThat(person.toProto()).isEqualTo(javaPerson)
+        Assertions.assertThat(person.toByteArray()).containsExactly(*javaPerson.toByteArray())
+        Assertions.assertThat(person.toByteString()).isEqualTo(javaPerson.toByteString())
+        Assertions.assertThat(Person.Address().toByteArray()).isEmpty()
+        Assertions.assertThat(Empty().toByteString()).isEqualTo(ByteString.EMPTY)
+    }
+
+    @Test
+    fun `non-optional message fields are always written, as toProto sets them`() {
+        val defaultBytes = MemberTest.Person.getDefaultInstance().toByteArray()
+        Assertions.assertThat(defaultBytes).isEmpty()
+        Assertions.assertThat(Person.parseFrom(defaultBytes)).isEqualTo(Person())
+        val home = MemberTest.Person.HOME_FIELD_NUMBER shl 3 or 2
+        val born = MemberTest.Person.BORN_FIELD_NUMBER shl 3 or 2
+        Assertions.assertThat(Person().toByteArray()).containsExactly(home.toByte(), 0, born.toByte(), 0)
+    }
+
+    @Test
+    fun `parseFrom decodes bytes produced by the java proto`() {
+        Assertions.assertThat(Person.parseFrom(javaPerson.toByteArray())).isEqualTo(person)
+        Assertions.assertThat(Person.parseFrom(javaPerson.toByteString())).isEqualTo(person)
+        val emailOnly = MemberTest.Person.newBuilder().setName("Grace").setEmail("grace@example.com").build()
+        Assertions.assertThat(Person.parseFrom(emailOnly.toByteArray()))
+            .isEqualTo(Person(name = "Grace", contact = Person.Contact.Email("grace@example.com")))
+        Assertions.assertThat(Empty.parseFrom(MemberTest.Empty.getDefaultInstance().toByteArray())).isInstanceOf(Empty::class.java)
+    }
+
+    @Test
+    fun `parseFrom skips unknown fields and rejects malformed input`() {
+        val withUnknownField = javaPerson.toBuilder()
+            .setUnknownFields(
+                com.google.protobuf.UnknownFieldSet.newBuilder()
+                    .addField(99, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(7).build())
+                    .build()
+            )
+            .build()
+        Assertions.assertThat(Person.parseFrom(withUnknownField.toByteArray())).isEqualTo(person)
+        Assertions.assertThatThrownBy { Person.parseFrom(byteArrayOf(0x0A, 0x05, 0x41)) }
+            .isInstanceOf(InvalidProtocolBufferException::class.java)
+    }
+
+    @Test
+    fun `binary serialization works through the runtime interfaces`() {
+        val companion = Person::class.java.getField("Companion").get(null) as KrotoDCMessageCompanion<*, *>
+        val bytes = (person as KrotoDCMessage<*>).toByteArray()
+        Assertions.assertThat(companion.parseFrom(bytes)).isEqualTo(person)
+        Assertions.assertThat(companion.parseFrom(ByteString.copyFrom(bytes))).isEqualTo(person)
     }
 
     @Test

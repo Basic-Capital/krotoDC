@@ -13,6 +13,7 @@
 // limitations under the License.
 package io.github.mscheong01.krotodc.specgenerators.file
 
+import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors
 import com.google.protobuf.Descriptors.Descriptor
 import com.google.protobuf.Descriptors.FileDescriptor
@@ -278,6 +279,8 @@ class DataClassGenerator : FileSpecGenerator {
                     )
                     .build()
             )
+            .addFunction(parseFromFunction(ByteArray::class.asClassName(), protoType, dataClassType))
+            .addFunction(parseFromFunction(ByteString::class.asClassName(), protoType, dataClassType))
             .addFunction(
                 FunSpec.builder("newProtoBuilder")
                     .addModifiers(KModifier.OVERRIDE)
@@ -288,6 +291,14 @@ class DataClassGenerator : FileSpecGenerator {
             .build()
         dataClassBuilder.addType(companion)
     }
+
+    private fun parseFromFunction(bytesType: ClassName, protoType: ClassName, dataClassType: ClassName): FunSpec =
+        FunSpec.builder("parseFrom")
+            .addModifiers(KModifier.OVERRIDE)
+            .addParameter("bytes", bytesType)
+            .returns(dataClassType)
+            .addStatement("return %T.parseFrom(bytes).toDataClass()", protoType)
+            .build()
 
     private fun mapProtoTypeToKotlinTypeAndDefaultValue(field: Descriptors.FieldDescriptor): Pair<TypeName, CodeWithImports> {
         var (poetType, defaultValue) = when (

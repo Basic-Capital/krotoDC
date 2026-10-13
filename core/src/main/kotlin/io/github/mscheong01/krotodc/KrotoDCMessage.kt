@@ -13,6 +13,7 @@
 // limitations under the License.
 package io.github.mscheong01.krotodc
 
+import com.google.protobuf.ByteString
 import com.google.protobuf.Message
 
 /**
@@ -24,6 +25,12 @@ interface KrotoDCMessage<P : Message> {
 
     /** Canonical protobuf JSON. With [includeDefaultValues], fields without presence are printed and whitespace is omitted. */
     fun toJson(includeDefaultValues: Boolean = false): String
+
+    /** Protobuf binary wire format, identical to `toProto().toByteArray()`. */
+    fun toByteArray(): ByteArray = toProto().toByteArray()
+
+    /** Protobuf binary wire format, identical to `toProto().toByteString()`. */
+    fun toByteString(): ByteString = toProto().toByteString()
 }
 
 /** Implemented by the companion object of every [KrotoDCMessage] data class. */
@@ -31,6 +38,12 @@ interface KrotoDCMessageCompanion<D : KrotoDCMessage<P>, P : Message> {
     fun fromProto(proto: P): D
 
     fun fromJson(json: String): D
+
+    /** Parses protobuf binary wire format. Throws [com.google.protobuf.InvalidProtocolBufferException] on malformed input. */
+    fun parseFrom(bytes: ByteArray): D
+
+    /** Parses protobuf binary wire format. Throws [com.google.protobuf.InvalidProtocolBufferException] on malformed input. */
+    fun parseFrom(bytes: ByteString): D
 
     fun newProtoBuilder(): Message.Builder
 
