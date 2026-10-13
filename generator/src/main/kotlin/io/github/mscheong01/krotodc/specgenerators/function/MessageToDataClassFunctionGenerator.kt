@@ -20,6 +20,7 @@ import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FunSpec
 import io.github.mscheong01.krotodc.KrotoDCConverter
+import io.github.mscheong01.krotodc.KrotoDCOptions
 import io.github.mscheong01.krotodc.import.CodeWithImports
 import io.github.mscheong01.krotodc.import.FunSpecsWithImports
 import io.github.mscheong01.krotodc.import.Import
@@ -144,12 +145,14 @@ class MessageToDataClassFunctionGenerator : FunSpecGenerator<Descriptor> {
             protoType,
             generatedType
         )
-        functionBuilder.addAnnotation(
-            AnnotationSpec.builder(KrotoDCConverter::class)
-                .addMember("from = %T::class", protoType)
-                .addMember("to = %T::class", generatedType)
-                .build()
-        )
+        if (KrotoDCOptions.converterAnnotations) {
+            functionBuilder.addAnnotation(
+                AnnotationSpec.builder(KrotoDCConverter::class)
+                    .addMember("from = %T::class", protoType)
+                    .addMember("to = %T::class", generatedType)
+                    .build()
+            )
+        }
 
         return FunSpecsWithImports(
             listOf(functionBuilder.build()),

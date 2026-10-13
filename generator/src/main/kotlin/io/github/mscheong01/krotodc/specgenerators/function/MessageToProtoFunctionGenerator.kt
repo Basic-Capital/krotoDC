@@ -19,7 +19,9 @@ import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.KModifier
 import io.github.mscheong01.krotodc.KrotoDCConverter
+import io.github.mscheong01.krotodc.KrotoDCOptions
 import io.github.mscheong01.krotodc.import.CodeWithImports
 import io.github.mscheong01.krotodc.import.FunSpecsWithImports
 import io.github.mscheong01.krotodc.import.Import
@@ -45,9 +47,7 @@ class MessageToProtoFunctionGenerator : FunSpecGenerator<Descriptor> {
         val imports = mutableSetOf<Import>()
         val generatedType = descriptor.krotoDCTypeName
         val protoType = descriptor.protobufJavaTypeName
-        val functionBuilder = FunSpec.builder("toProto")
-            .receiver(generatedType)
-            .returns(protoType)
+        val functionBuilder = toProtoFunSpecBuilder(generatedType, protoType)
 
         functionBuilder.addCode("return %T.newBuilder()\n", protoType)
 
@@ -91,7 +91,7 @@ class MessageToProtoFunctionGenerator : FunSpecGenerator<Descriptor> {
             if (field.name in descriptor.realOneofs.map { it.fields }.flatten().map { it.name }.toSet()) {
                 continue
             }
-            val fieldName = "this@toProto.${field.jsonName.escapeIfNecessary()}"
+            val fieldName = "${selfReference(generatedType)}.${field.jsonName.escapeIfNecessary()}"
             val optional = field.isKrotoDCOptional
             if (optional) {
                 functionBuilder.beginControlFlow("if ($fieldName != null)")
@@ -145,18 +145,36 @@ class MessageToProtoFunctionGenerator : FunSpecGenerator<Descriptor> {
             generatedType,
             protoType
         )
-        functionBuilder.addAnnotation(
-            AnnotationSpec.Companion.builder(KrotoDCConverter::class)
-                .addMember("from = %T::class", generatedType)
-                .addMember("to = %T::class", protoType)
-                .build()
-        )
+        if (KrotoDCOptions.converterAnnotations) {
+            functionBuilder.addAnnotation(
+                AnnotationSpec.Companion.builder(KrotoDCConverter::class)
+                    .addMember("from = %T::class", generatedType)
+                    .addMember("to = %T::class", protoType)
+                    .build()
+            )
+        }
 
         return FunSpecsWithImports(
             listOf(functionBuilder.build()),
             imports
         )
     }
+
+    /** An extension on the data class by default, or an override of [KrotoDCMessage.toProto] for member converters. */
+    private fun toProtoFunSpecBuilder(generatedType: ClassName, protoType: ClassName): FunSpec.Builder =
+        FunSpec.builder("toProto")
+            .apply {
+                if (KrotoDCOptions.memberConverters) {
+                    addModifiers(KModifier.OVERRIDE)
+                } else {
+                    receiver(generatedType)
+                }
+            }
+            .returns(protoType)
+
+    /** The data class instance from inside the `apply` block. */
+    private fun selfReference(generatedType: ClassName): String =
+        if (KrotoDCOptions.memberConverters) "this@${generatedType.simpleName}" else "this@toProto"
 
     fun transformCodeTemplate(field: FieldDescriptor): TransformTemplateWithImports {
         return when (field.type) {
@@ -174,7 +192,11 @@ class MessageToProtoFunctionGenerator : FunSpecGenerator<Descriptor> {
             return if (descriptor.isPredefinedType()) {
                 preDefinedTypeTransformCodeTemplate(descriptor)
             } else {
-                TransformTemplateWithImports.of("%L.toProto()", setOf(descriptor.toProtoImport))
+                if (KrotoDCOptions.memberConverters) {
+                    TransformTemplateWithImports.of("%L.toProto()")
+                } else {
+                    TransformTemplateWithImports.of("%L.toProto()", setOf(descriptor.toProtoImport))
+                }
             }
         }
 

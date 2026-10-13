@@ -91,15 +91,41 @@ protobuf {
     }
     generateProtoTasks {
         all().forEach {
-            if (it.name.startsWith("generateTestProto")) {
+            if (it.name != "generateProto") {
                 it.dependsOn("jar")
             }
 
             it.plugins {
                 id("grpc")
                 id("grpckt")
-                id("krotoDC")
+                id("krotoDC") {
+                    if (it.sourceSet.name == "memberTest") {
+                        option("converterLocation=member")
+                        option("converterAnnotations=false")
+                        option("allFieldDefaults=true")
+                    }
+                }
             }
         }
     }
+}
+
+// Protos generated with member converters, compiled and exercised end to end.
+val memberTest: SourceSet by sourceSets.creating
+configurations[memberTest.implementationConfigurationName].extendsFrom(
+    configurations.implementation.get(),
+    configurations.testImplementation.get()
+)
+configurations[memberTest.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+
+val memberTestTask = tasks.register<Test>("memberTest") {
+    description = "Runs tests against code generated with converterLocation=member."
+    group = "verification"
+    testClassesDirs = memberTest.output.classesDirs
+    classpath = memberTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
+tasks.check {
+    dependsOn(memberTestTask)
 }

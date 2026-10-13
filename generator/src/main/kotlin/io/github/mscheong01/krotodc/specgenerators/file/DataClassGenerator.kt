@@ -34,13 +34,18 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.asClassName
 import io.github.mscheong01.krotodc.KrotoDC
+import io.github.mscheong01.krotodc.KrotoDCMessage
+import io.github.mscheong01.krotodc.KrotoDCMessageCompanion
 import io.github.mscheong01.krotodc.KrotoDCOptions
+import io.github.mscheong01.krotodc.KrotoJson
 import io.github.mscheong01.krotodc.import.CodeWithImports
 import io.github.mscheong01.krotodc.import.Import
 import io.github.mscheong01.krotodc.import.TypeSpecsWithImports
 import io.github.mscheong01.krotodc.predefinedtypes.HandledPreDefinedType
 import io.github.mscheong01.krotodc.specgenerators.FileSpecGenerator
+import io.github.mscheong01.krotodc.specgenerators.function.MessageToProtoFunctionGenerator
 import io.github.mscheong01.krotodc.util.MAP_ENTRY_KEY_FIELD_NUMBER
 import io.github.mscheong01.krotodc.util.MAP_ENTRY_VALUE_FIELD_NUMBER
 import io.github.mscheong01.krotodc.util.addAllImports
@@ -53,6 +58,7 @@ import io.github.mscheong01.krotodc.util.krotoDCPackage
 import io.github.mscheong01.krotodc.util.krotoDCTypeName
 import io.github.mscheong01.krotodc.util.protobufJavaTypeName
 import io.github.mscheong01.krotodc.util.simpleNames
+import io.github.mscheong01.krotodc.util.toDataClassImport
 
 class DataClassGenerator : FileSpecGenerator {
 
@@ -212,11 +218,75 @@ class DataClassGenerator : FileSpecGenerator {
                 .build()
         )
 
-        dataClassBuilder.addType(TypeSpec.companionObjectBuilder().build())
+        if (KrotoDCOptions.memberConverters) {
+            addMemberConverters(messageDescriptor, dataClassBuilder, imports)
+        } else {
+            dataClassBuilder.addType(TypeSpec.companionObjectBuilder().build())
+        }
         return TypeSpecsWithImports(
             listOf(dataClassBuilder.build()),
             imports
         )
+    }
+
+    /**
+     * Makes the data class a [KrotoDCMessage] with `toProto`/`toJson` members, and its companion a
+     * [KrotoDCMessageCompanion] that delegates to the top-level `toDataClass` extension.
+     */
+    private fun addMemberConverters(
+        messageDescriptor: Descriptor,
+        dataClassBuilder: TypeSpec.Builder,
+        imports: MutableSet<Import>
+    ) {
+        val dataClassType = messageDescriptor.krotoDCTypeName
+        val protoType = messageDescriptor.protobufJavaTypeName
+        dataClassBuilder.addSuperinterface(KrotoDCMessage::class.asClassName().parameterizedBy(protoType))
+        MessageToProtoFunctionGenerator().generate(messageDescriptor).let {
+            it.funSpecs.forEach { funSpec -> dataClassBuilder.addFunction(funSpec) }
+            imports.addAll(it.imports)
+        }
+        dataClassBuilder.addFunction(
+            FunSpec.builder("toJson")
+                .addModifiers(KModifier.OVERRIDE)
+                .addParameter("includeDefaultValues", BOOLEAN)
+                .returns(STRING)
+                .addStatement("return %T.print(toProto(), includeDefaultValues)", KrotoJson::class)
+                .build()
+        )
+        imports.add(messageDescriptor.toDataClassImport)
+        val companion = TypeSpec.companionObjectBuilder()
+            .addSuperinterface(
+                KrotoDCMessageCompanion::class.asClassName().parameterizedBy(dataClassType, protoType)
+            )
+            .addFunction(
+                FunSpec.builder("fromProto")
+                    .addModifiers(KModifier.OVERRIDE)
+                    .addParameter("proto", protoType)
+                    .returns(dataClassType)
+                    .addStatement("return proto.toDataClass()")
+                    .build()
+            )
+            .addFunction(
+                FunSpec.builder("fromJson")
+                    .addModifiers(KModifier.OVERRIDE)
+                    .addParameter("json", STRING)
+                    .returns(dataClassType)
+                    .addStatement(
+                        "return %T.merge(json, %T.newBuilder()).build().toDataClass()",
+                        KrotoJson::class,
+                        protoType
+                    )
+                    .build()
+            )
+            .addFunction(
+                FunSpec.builder("newProtoBuilder")
+                    .addModifiers(KModifier.OVERRIDE)
+                    .returns(protoType.nestedClass("Builder"))
+                    .addStatement("return %T.newBuilder()", protoType)
+                    .build()
+            )
+            .build()
+        dataClassBuilder.addType(companion)
     }
 
     private fun mapProtoTypeToKotlinTypeAndDefaultValue(field: Descriptors.FieldDescriptor): Pair<TypeName, CodeWithImports> {

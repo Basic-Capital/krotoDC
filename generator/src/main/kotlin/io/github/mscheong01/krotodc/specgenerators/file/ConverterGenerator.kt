@@ -16,6 +16,7 @@ package io.github.mscheong01.krotodc.specgenerators.file
 import com.google.protobuf.Descriptors
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
+import io.github.mscheong01.krotodc.KrotoDCOptions
 import io.github.mscheong01.krotodc.import.FunSpecsWithImports
 import io.github.mscheong01.krotodc.import.Import
 import io.github.mscheong01.krotodc.specgenerators.FileSpecGenerator
@@ -64,17 +65,20 @@ class ConverterGenerator : FileSpecGenerator {
             funSpecs.addAll(it.funSpecs)
             imports.addAll(it.imports)
         }
-        messageToProtoGenerator.generate(messageDescriptor).let {
-            funSpecs.addAll(it.funSpecs)
-            imports.addAll(it.imports)
-        }
-        toJsonFunctionGenerator.generate(messageDescriptor).let {
-            funSpecs.addAll(it.funSpecs)
-            imports.addAll(it.imports)
-        }
-        fromJsonFunctionGenerator.generate(messageDescriptor).let {
-            funSpecs.addAll(it.funSpecs)
-            imports.addAll(it.imports)
+        // With member converters, toProto/toJson/fromJson live on the data class and its companion instead.
+        if (!KrotoDCOptions.memberConverters) {
+            messageToProtoGenerator.generate(messageDescriptor).let {
+                funSpecs.addAll(it.funSpecs)
+                imports.addAll(it.imports)
+            }
+            toJsonFunctionGenerator.generate(messageDescriptor).let {
+                funSpecs.addAll(it.funSpecs)
+                imports.addAll(it.imports)
+            }
+            fromJsonFunctionGenerator.generate(messageDescriptor).let {
+                funSpecs.addAll(it.funSpecs)
+                imports.addAll(it.imports)
+            }
         }
 
         messageDescriptor.nestedTypes.forEach { nestedType ->

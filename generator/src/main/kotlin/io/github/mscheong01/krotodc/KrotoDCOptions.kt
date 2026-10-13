@@ -18,6 +18,9 @@ package io.github.mscheong01.krotodc
  * protobuf gradle plugin's `option("allFieldDefaults=true")`.
  */
 object KrotoDCOptions {
+    val memberConverters: Boolean
+        get() = converterLocation == ConverterLocation.MEMBER
+
     /** Give every data class constructor parameter a default value, as in krotoDC <= 1.1.x. */
     var allFieldDefaults: Boolean = false
         private set
@@ -28,6 +31,23 @@ object KrotoDCOptions {
      */
     var converterPackage: ConverterPackage = ConverterPackage.MESSAGE
         private set
+
+    /**
+     * Where `toProto`, `toJson` and `fromJson` go. `topLevel` (default) generates top-level extension functions;
+     * `member` makes them members of the data class and its companion, which implement [KrotoDCMessage] and
+     * [KrotoDCMessageCompanion]. `toDataClass` stays a top-level extension either way.
+     */
+    var converterLocation: ConverterLocation = ConverterLocation.TOP_LEVEL
+        private set
+
+    /** Annotate converter functions with `@KrotoDCConverter`. */
+    var converterAnnotations: Boolean = true
+        private set
+
+    enum class ConverterLocation(val optionValue: String) {
+        TOP_LEVEL("topLevel"),
+        MEMBER("member")
+    }
 
     enum class ConverterPackage(val optionValue: String) {
         MESSAGE("message"),
@@ -52,7 +72,14 @@ object KrotoDCOptions {
                     "Unknown converterPackage '$value'. Known values: ${ConverterPackage.entries.map { it.optionValue }}"
                 )
         } ?: ConverterPackage.MESSAGE
+        converterLocation = options["converterLocation"]?.let { value ->
+            ConverterLocation.entries.find { it.optionValue == value }
+                ?: throw IllegalArgumentException(
+                    "Unknown converterLocation '$value'. Known values: ${ConverterLocation.entries.map { it.optionValue }}"
+                )
+        } ?: ConverterLocation.TOP_LEVEL
+        converterAnnotations = options["converterAnnotations"]?.toBooleanStrict() ?: true
     }
 
-    private val knownOptions = setOf("allFieldDefaults", "converterPackage")
+    private val knownOptions = setOf("allFieldDefaults", "converterPackage", "converterLocation", "converterAnnotations")
 }

@@ -164,6 +164,9 @@ val Descriptor.converterImports: Set<Import>
         ) {
             return setOf()
         }
+        if (KrotoDCOptions.memberConverters) {
+            return setOf(this.toDataClassImport)
+        }
         return setOf(
             this.toProtoImport,
             this.toDataClassImport
