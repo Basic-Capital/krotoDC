@@ -133,4 +133,37 @@ class KrotoDCOptionsTest {
     fun `unknown option is rejected`() {
         assertThrows<IllegalArgumentException> { KrotoDCOptions.load("allFieldDefault=true") }
     }
+
+    private val explicitTestFiles = listOf(
+        DefaultValuesTest.getDescriptor(),
+        io.github.mscheong01.test.Test.getDescriptor(),
+        io.github.mscheong01.keyword.Keyword.getDescriptor(),
+        io.github.mscheong01.wellknowntypes.WellKnownTypes.getDescriptor()
+    )
+
+    private fun generatedMemberCode(): String = explicitTestFiles.flatMap { file ->
+        DataClassGenerator().generate(file) + ConverterGenerator().generate(file)
+    }.joinToString("\n") { it.toString() }
+
+    @Test
+    fun `converterStyle=explicit converters have no scope functions or collection lambdas`() {
+        KrotoDCOptions.load("converterLocation=member,converterStyle=explicit")
+        val code = generatedMemberCode()
+        Assertions.assertThat(code)
+            .doesNotContain(".apply {", ".map {", ".mapValues {", ".let {", "this@")
+            .contains("val protoBuilder: ", "return protoBuilder.build()", "for (element in this.", "for (entry in this.")
+            .contains("ArrayList<", "LinkedHashMap<", "if (this.has")
+    }
+
+    @Test
+    fun `converterStyle defaults to builderApply`() {
+        KrotoDCOptions.load("converterLocation=member")
+        Assertions.assertThat(generatedMemberCode()).contains(".apply {", ".map {", ".mapValues {").doesNotContain("protoBuilder")
+    }
+
+    @Test
+    fun `converterStyle=explicit requires member converters and unknown styles are rejected`() {
+        assertThrows<IllegalArgumentException> { KrotoDCOptions.load("converterStyle=explicit") }
+        assertThrows<IllegalArgumentException> { KrotoDCOptions.load("converterLocation=member,converterStyle=fancy") }
+    }
 }

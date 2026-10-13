@@ -306,7 +306,8 @@ class DataClassGenerator : FileSpecGenerator {
             .addStatement("return %T.parseFrom(bytes).toDataClass()", protoType)
             .build()
 
-    private fun mapProtoTypeToKotlinTypeAndDefaultValue(field: Descriptors.FieldDescriptor): Pair<TypeName, CodeWithImports> {
+    /** The data class property type of [field] and its default value. */
+    internal fun mapProtoTypeToKotlinTypeAndDefaultValue(field: Descriptors.FieldDescriptor): Pair<TypeName, CodeWithImports> {
         var (poetType, defaultValue) = when (
             field.javaType ?: throw IllegalStateException("Field $field does not have a java type")
         ) {

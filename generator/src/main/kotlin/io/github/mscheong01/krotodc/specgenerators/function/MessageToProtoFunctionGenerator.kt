@@ -48,6 +48,10 @@ class MessageToProtoFunctionGenerator : FunSpecGenerator<Descriptor> {
         val generatedType = descriptor.krotoDCTypeName
         val protoType = descriptor.protobufJavaTypeName
         val functionBuilder = toProtoFunSpecBuilder(generatedType, protoType)
+        if (KrotoDCOptions.explicitConverters) {
+            addExplicitBody(descriptor, functionBuilder, imports)
+            return finish(functionBuilder, generatedType, protoType, imports)
+        }
 
         functionBuilder.addCode("return %T.newBuilder()\n", protoType)
 
@@ -140,6 +144,15 @@ class MessageToProtoFunctionGenerator : FunSpecGenerator<Descriptor> {
         functionBuilder.endControlFlow()
 
         functionBuilder.addCode(".build()")
+        return finish(functionBuilder, generatedType, protoType, imports)
+    }
+
+    private fun finish(
+        functionBuilder: FunSpec.Builder,
+        generatedType: ClassName,
+        protoType: ClassName,
+        imports: Set<Import>
+    ): FunSpecsWithImports {
         functionBuilder.addKdoc(
             "Converts [%T] to [%T]",
             generatedType,
@@ -158,6 +171,93 @@ class MessageToProtoFunctionGenerator : FunSpecGenerator<Descriptor> {
             listOf(functionBuilder.build()),
             imports
         )
+    }
+
+    /**
+     * `converterStyle=explicit`: a typed builder local, one statement per field with explicit `this.` receivers, and
+     * plain loops for collections, so kotlinc has no lambdas to infer and no `apply` scope to search. The calls made on
+     * the builder are equivalent to the `builderApply` style, so the resulting message is the same.
+     */
+    private fun addExplicitBody(descriptor: Descriptor, functionBuilder: FunSpec.Builder, imports: MutableSet<Import>) {
+        val protoType = descriptor.protobufJavaTypeName
+        functionBuilder.addStatement(
+            "val·protoBuilder:·%T·=·%T.newBuilder()",
+            protoType.nestedClass("Builder"),
+            protoType
+        )
+        val oneOfFieldNames = descriptor.realOneofs.flatMap { it.fields }.map { it.name }.toSet()
+
+        for (oneOf in descriptor.realOneofs) {
+            val oneOfJsonName = fieldNameToJsonName(oneOf.name)
+            val oneOfReference = "this.${oneOfJsonName.escapeIfNecessary()}"
+            functionBuilder.beginControlFlow("when·(%L)", oneOfReference)
+            for (field in oneOf.fields) {
+                val oneOfFieldDataClassName = ClassName(
+                    oneOf.file.krotoDCPackage,
+                    *descriptor.simpleNames.toMutableList().apply {
+                        add(oneOfJsonName.capitalize())
+                        add(field.jsonName.capitalize())
+                    }.toTypedArray()
+                )
+                val (template, downStreamImports) = transformCodeTemplate(field)
+                imports.addAll(downStreamImports)
+                functionBuilder.beginControlFlow("is·%T·->", oneOfFieldDataClassName)
+                functionBuilder.addStatement(
+                    "protoBuilder.set%L(%L)",
+                    field.javaFieldName.capitalize(),
+                    template.safeCall("$oneOfReference.${field.jsonName.escapeIfNecessary()}")
+                )
+                functionBuilder.endControlFlow()
+            }
+            functionBuilder.addStatement("null·->·{}")
+            functionBuilder.endControlFlow()
+        }
+
+        for (field in descriptor.fields) {
+            if (field.name in oneOfFieldNames) {
+                continue
+            }
+            val fieldReference = "this.${field.jsonName.escapeIfNecessary()}"
+            val accessorSuffix = field.javaFieldName.capitalize()
+            if (field.isMapField) {
+                val valueField = field.messageType.findFieldByNumber(MAP_ENTRY_VALUE_FIELD_NUMBER)
+                val (template, downStreamImports) = transformCodeTemplate(valueField)
+                imports.addAll(downStreamImports)
+                if (template.value == "%L") {
+                    functionBuilder.addStatement("protoBuilder.putAll%L(%L)", accessorSuffix, fieldReference)
+                } else {
+                    functionBuilder.beginControlFlow("for·(entry·in·%L.entries)", fieldReference)
+                    functionBuilder.addStatement(
+                        "protoBuilder.put%L(entry.key,·%L)",
+                        accessorSuffix,
+                        template.safeCall("entry.value")
+                    )
+                    functionBuilder.endControlFlow()
+                }
+            } else if (field.isRepeated) {
+                val (template, downStreamImports) = transformCodeTemplate(field)
+                imports.addAll(downStreamImports)
+                if (template.value == "%L") {
+                    functionBuilder.addStatement("protoBuilder.addAll%L(%L)", accessorSuffix, fieldReference)
+                } else {
+                    functionBuilder.beginControlFlow("for·(element·in·%L)", fieldReference)
+                    functionBuilder.addStatement("protoBuilder.add%L(%L)", accessorSuffix, template.safeCall("element"))
+                    functionBuilder.endControlFlow()
+                }
+            } else {
+                val (template, downStreamImports) = transformCodeTemplate(field)
+                imports.addAll(downStreamImports)
+                val optional = field.isKrotoDCOptional
+                if (optional) {
+                    functionBuilder.beginControlFlow("if·(%L·!=·null)", fieldReference)
+                }
+                functionBuilder.addStatement("protoBuilder.set%L(%L)", accessorSuffix, template.safeCall(fieldReference))
+                if (optional) {
+                    functionBuilder.endControlFlow()
+                }
+            }
+        }
+        functionBuilder.addStatement("return·protoBuilder.build()")
     }
 
     /** An extension on the data class by default, or an override of [KrotoDCMessage.toProto] for member converters. */

@@ -99,10 +99,13 @@ protobuf {
                 id("grpc")
                 id("grpckt")
                 id("krotoDC") {
-                    if (it.sourceSet.name == "memberTest") {
+                    if (it.sourceSet.name == "memberTest" || it.sourceSet.name == "explicitMemberTest") {
                         option("converterLocation=member")
                         option("converterAnnotations=false")
                         option("allFieldDefaults=true")
+                    }
+                    if (it.sourceSet.name == "explicitMemberTest") {
+                        option("converterStyle=explicit")
                     }
                 }
             }
@@ -126,6 +129,26 @@ val memberTestTask = tasks.register<Test>("memberTest") {
     useJUnitPlatform()
 }
 
+// The same protos and tests as memberTest, generated with converterStyle=explicit.
+val explicitMemberTest: SourceSet by sourceSets.creating {
+    (extensions.getByName("proto") as SourceDirectorySet).srcDir("src/memberTest/proto")
+}
+extensions.getByType<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>()
+    .sourceSets.getByName(explicitMemberTest.name).kotlin.srcDir("src/memberTest/kotlin")
+configurations[explicitMemberTest.implementationConfigurationName].extendsFrom(
+    configurations.implementation.get(),
+    configurations.testImplementation.get()
+)
+configurations[explicitMemberTest.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+
+val explicitMemberTestTask = tasks.register<Test>("explicitMemberTest") {
+    description = "Runs the memberTest tests against code generated with converterStyle=explicit."
+    group = "verification"
+    testClassesDirs = explicitMemberTest.output.classesDirs
+    classpath = explicitMemberTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
 tasks.check {
-    dependsOn(memberTestTask)
+    dependsOn(memberTestTask, explicitMemberTestTask)
 }

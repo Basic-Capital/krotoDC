@@ -19,6 +19,8 @@ import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.ParameterizedTypeName
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import io.github.mscheong01.krotodc.KrotoDCConverter
 import io.github.mscheong01.krotodc.KrotoDCOptions
 import io.github.mscheong01.krotodc.import.CodeWithImports
@@ -26,6 +28,7 @@ import io.github.mscheong01.krotodc.import.FunSpecsWithImports
 import io.github.mscheong01.krotodc.import.Import
 import io.github.mscheong01.krotodc.predefinedtypes.HandledPreDefinedType
 import io.github.mscheong01.krotodc.specgenerators.FunSpecGenerator
+import io.github.mscheong01.krotodc.specgenerators.file.DataClassGenerator
 import io.github.mscheong01.krotodc.template.TransformTemplateWithImports
 import io.github.mscheong01.krotodc.util.MAP_ENTRY_VALUE_FIELD_NUMBER
 import io.github.mscheong01.krotodc.util.capitalize
@@ -50,6 +53,10 @@ class MessageToDataClassFunctionGenerator : FunSpecGenerator<Descriptor> {
         val functionBuilder = FunSpec.builder("toDataClass")
             .receiver(protoType)
             .returns(generatedType)
+        if (KrotoDCOptions.explicitConverters) {
+            addExplicitBody(descriptor, functionBuilder, imports)
+            return finish(functionBuilder, generatedType, protoType, imports)
+        }
 
         functionBuilder.addCode("return %T(", generatedType)
 
@@ -140,6 +147,15 @@ class MessageToDataClassFunctionGenerator : FunSpecGenerator<Descriptor> {
             }
         }
         functionBuilder.addCode(")")
+        return finish(functionBuilder, generatedType, protoType, imports)
+    }
+
+    private fun finish(
+        functionBuilder: FunSpec.Builder,
+        generatedType: ClassName,
+        protoType: ClassName,
+        imports: Set<Import>
+    ): FunSpecsWithImports {
         functionBuilder.addKdoc(
             "Converts [%T] to [%T]",
             protoType,
@@ -160,6 +176,122 @@ class MessageToDataClassFunctionGenerator : FunSpecGenerator<Descriptor> {
         )
     }
 
+    /**
+     * `converterStyle=explicit`: converted collections and oneofs go into explicitly typed locals filled by plain
+     * loops, every getter has an explicit `this.` receiver, and the constructor call takes named arguments. Element,
+     * key and value types are the data class property types. Untransformed collections are passed through as the proto's
+     * lists and maps, as in the `builderApply` style.
+     */
+    private fun addExplicitBody(descriptor: Descriptor, functionBuilder: FunSpec.Builder, imports: MutableSet<Import>) {
+        val generatedType = descriptor.krotoDCTypeName
+        val protoType = descriptor.protobufJavaTypeName
+        val dataClassGenerator = DataClassGenerator()
+        val arguments = mutableListOf<CodeBlock>()
+        val oneOfFieldNames = descriptor.realOneofs.flatMap { it.fields }.map { it.name }.toSet()
+
+        for (oneOf in descriptor.realOneofs) {
+            val oneOfJsonName = fieldNameToJsonName(oneOf.name)
+            val interfaceClassName = ClassName(
+                oneOf.file.krotoDCPackage,
+                *descriptor.simpleNames.toMutableList().apply { add(oneOfJsonName.capitalize()) }.toTypedArray()
+            )
+            val caseClassName = protoType.nestedClass("${oneOfJsonName.capitalize()}Case")
+            val local = "${oneOfJsonName}Converted"
+            functionBuilder.beginControlFlow(
+                "val·%L:·%T·=·when·(this.%LCase)",
+                local,
+                interfaceClassName.copy(nullable = true),
+                oneOfJsonName
+            )
+            for (field in oneOf.fields) {
+                val (template, downStreamImports) = transformCodeTemplate(field)
+                imports.addAll(downStreamImports)
+                functionBuilder.addStatement(
+                    "%T.%L·->·%T(%L·=·%L)",
+                    caseClassName,
+                    field.name.uppercase(),
+                    interfaceClassName.nestedClass(field.jsonName.capitalize()),
+                    field.jsonName.escapeIfNecessary(),
+                    template.safeCall("this.${field.javaFieldName.escapeIfNecessary()}")
+                )
+            }
+            functionBuilder.addStatement(
+                "%T.%L·->·null",
+                caseClassName,
+                "${oneOf.name.replace("_", "").uppercase()}_NOT_SET"
+            )
+            functionBuilder.addStatement("null·->·null")
+            functionBuilder.endControlFlow()
+            arguments.add(CodeBlock.of("%L·=·%L", oneOfJsonName.escapeIfNecessary(), local))
+        }
+
+        for (field in descriptor.fields) {
+            if (field.name in oneOfFieldNames) {
+                continue
+            }
+            val argumentName = field.jsonName.escapeIfNecessary()
+            val protoFieldName = field.javaFieldName
+            val local = "${field.jsonName}Converted"
+            val propertyType = dataClassGenerator.mapProtoTypeToKotlinTypeAndDefaultValue(field).first
+            if (field.isMapField) {
+                val valueField = field.messageType.findFieldByNumber(MAP_ENTRY_VALUE_FIELD_NUMBER)
+                val (template, downStreamImports) = transformCodeTemplate(valueField)
+                imports.addAll(downStreamImports)
+                if (template.value == "%L") {
+                    arguments.add(CodeBlock.of("%L·=·this.%LMap", argumentName, protoFieldName))
+                    continue
+                }
+                val typeArguments = (propertyType as ParameterizedTypeName).typeArguments
+                val localType = LINKED_HASH_MAP.parameterizedBy(typeArguments[0], typeArguments[1])
+                functionBuilder.addStatement("val·%L:·%T·=·%T(this.%LCount)", local, localType, localType, protoFieldName)
+                functionBuilder.beginControlFlow("for·(entry·in·this.%LMap.entries)", protoFieldName)
+                functionBuilder.addStatement("%L.put(entry.key,·%L)", local, template.safeCall("entry.value"))
+                functionBuilder.endControlFlow()
+                arguments.add(CodeBlock.of("%L·=·%L", argumentName, local))
+            } else if (field.isRepeated) {
+                val (template, downStreamImports) = transformCodeTemplate(field)
+                imports.addAll(downStreamImports)
+                if (template.value == "%L") {
+                    arguments.add(CodeBlock.of("%L·=·this.%LList", argumentName, protoFieldName))
+                    continue
+                }
+                val elementType = (propertyType as ParameterizedTypeName).typeArguments[0]
+                val localType = ARRAY_LIST.parameterizedBy(elementType)
+                functionBuilder.addStatement("val·%L:·%T·=·%T(this.%LCount)", local, localType, localType, protoFieldName)
+                functionBuilder.beginControlFlow("for·(element·in·this.%LList)", protoFieldName)
+                functionBuilder.addStatement("%L.add(%L)", local, template.safeCall("element"))
+                functionBuilder.endControlFlow()
+                arguments.add(CodeBlock.of("%L·=·%L", argumentName, local))
+            } else {
+                val (template, downStreamImports) = transformCodeTemplate(field)
+                imports.addAll(downStreamImports)
+                val value = template.safeCall("this.${protoFieldName.escapeIfNecessary()}")
+                if (field.isKrotoDCOptional) {
+                    arguments.add(
+                        CodeBlock.of(
+                            "%L·=·if·(this.has%L())·%L·else·null",
+                            argumentName,
+                            protoFieldName.capitalize(),
+                            value
+                        )
+                    )
+                } else {
+                    arguments.add(CodeBlock.of("%L·=·%L", argumentName, value))
+                }
+            }
+        }
+
+        if (arguments.isEmpty()) {
+            functionBuilder.addStatement("return·%T()", generatedType)
+            return
+        }
+        functionBuilder.addCode("return·%T(\n⇥", generatedType)
+        for (argument in arguments) {
+            functionBuilder.addCode("%L,\n", argument)
+        }
+        functionBuilder.addCode("⇤)\n")
+    }
+
     // code template that could be used like CodeBlock.of(transformCodeTemplate, fieldName)
     fun transformCodeTemplate(field: FieldDescriptor): TransformTemplateWithImports {
         return when (field.type) {
@@ -173,6 +305,9 @@ class MessageToDataClassFunctionGenerator : FunSpecGenerator<Descriptor> {
     }
 
     companion object {
+        private val ARRAY_LIST = ClassName("kotlin.collections", "ArrayList")
+        private val LINKED_HASH_MAP = ClassName("kotlin.collections", "LinkedHashMap")
+
         fun messageTypeTransformCodeTemplate(descriptor: Descriptor): TransformTemplateWithImports {
             return when {
                 descriptor.isPredefinedType() -> {

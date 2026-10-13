@@ -41,6 +41,17 @@ object KrotoDCOptions {
     var converterLocation: ConverterLocation = ConverterLocation.TOP_LEVEL
         private set
 
+    /**
+     * How converter bodies are written. `builderApply` (default) uses `newBuilder().apply { ... }` with `map`/`mapValues`
+     * lambdas. `explicit` writes one statement per field with explicit receivers, explicitly typed locals and plain
+     * loops, which leaves kotlinc almost no type inference or scope resolution to do. Requires `converterLocation=member`.
+     */
+    var converterStyle: ConverterStyle = ConverterStyle.BUILDER_APPLY
+        private set
+
+    val explicitConverters: Boolean
+        get() = converterStyle == ConverterStyle.EXPLICIT
+
     /** Annotate converter functions with `@KrotoDCConverter`. */
     var converterAnnotations: Boolean = true
         private set
@@ -48,6 +59,11 @@ object KrotoDCOptions {
     enum class ConverterLocation(val optionValue: String) {
         TOP_LEVEL("topLevel"),
         MEMBER("member")
+    }
+
+    enum class ConverterStyle(val optionValue: String) {
+        BUILDER_APPLY("builderApply"),
+        EXPLICIT("explicit")
     }
 
     enum class ConverterPackage(val optionValue: String) {
@@ -80,7 +96,22 @@ object KrotoDCOptions {
                 )
         } ?: ConverterLocation.TOP_LEVEL
         converterAnnotations = options["converterAnnotations"]?.toBooleanStrict() ?: true
+        converterStyle = options["converterStyle"]?.let { value ->
+            ConverterStyle.entries.find { it.optionValue == value }
+                ?: throw IllegalArgumentException(
+                    "Unknown converterStyle '$value'. Known values: ${ConverterStyle.entries.map { it.optionValue }}"
+                )
+        } ?: ConverterStyle.BUILDER_APPLY
+        require(converterStyle != ConverterStyle.EXPLICIT || converterLocation == ConverterLocation.MEMBER) {
+            "converterStyle=explicit requires converterLocation=member"
+        }
     }
 
-    private val knownOptions = setOf("allFieldDefaults", "converterPackage", "converterLocation", "converterAnnotations")
+    private val knownOptions = setOf(
+        "allFieldDefaults",
+        "converterPackage",
+        "converterLocation",
+        "converterAnnotations",
+        "converterStyle"
+    )
 }
