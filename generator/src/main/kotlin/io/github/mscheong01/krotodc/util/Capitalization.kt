@@ -19,3 +19,19 @@ fun String.capitalize(): String {
 fun String.decapitalize(): String {
     return this.replaceFirstChar { it.lowercase() }
 }
+
+/** `UnaryRPC` -> `UNARY_RPC`, `GetHTTPThing` -> `GET_HTTP_THING`, `listPeople` -> `LIST_PEOPLE`. */
+fun String.toUpperSnakeCase(): String {
+    val result = StringBuilder()
+    for ((i, c) in this.withIndex()) {
+        if (c.isUpperCase() && i > 0 && this[i - 1] != '_') {
+            val previous = this[i - 1]
+            val next = this.getOrNull(i + 1)
+            if (previous.isLowerCase() || previous.isDigit() || (previous.isUpperCase() && next != null && next.isLowerCase())) {
+                result.append('_')
+            }
+        }
+        result.append(c.uppercaseChar())
+    }
+    return result.toString()
+}

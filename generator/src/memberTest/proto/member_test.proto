@@ -49,3 +49,10 @@ message Envelope {
   string sender_name = 1;
   google.protobuf.Any payload = 2;
 }
+
+service PersonService {
+  rpc GetPerson(Person) returns (Person);
+  rpc ListHTTPAddresses(Person) returns (stream Person.Address);
+  rpc UploadPeople(stream Person) returns (Empty);
+  rpc Chat(stream Person) returns (stream Person);
+}
