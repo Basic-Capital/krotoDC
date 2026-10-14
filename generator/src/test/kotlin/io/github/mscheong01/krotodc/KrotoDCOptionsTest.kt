@@ -19,6 +19,7 @@ import com.google.protobuf.Descriptors
 import com.google.protobuf.compiler.PluginProtos
 import io.github.mscheong01.krotodc.specgenerators.file.ConverterGenerator
 import io.github.mscheong01.krotodc.specgenerators.file.DataClassGenerator
+import io.github.mscheong01.krotodc.specgenerators.file.GrpcKrotoGenerator
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -159,6 +160,19 @@ class KrotoDCOptionsTest {
     fun `converterStyle defaults to builderApply`() {
         KrotoDCOptions.load("converterLocation=member")
         Assertions.assertThat(generatedMemberCode()).contains(".apply {", ".map {", ".mapValues {").doesNotContain("protoBuilder")
+    }
+
+    private fun generatedGrpcCode(): String =
+        GrpcKrotoGenerator().generate(io.github.mscheong01.rpc.Rpc.getDescriptor()).joinToString("\n") { it.toString() }
+
+    @Test
+    fun `gRPC descriptor accessors are generated only with grpcDescriptors=true`() {
+        val accessors = arrayOf("SERVICE_NAME", "serviceDescriptor", "unaryTestMethod", "FullMethodNames")
+        KrotoDCOptions.load("converterLocation=member")
+        Assertions.assertThat(generatedGrpcCode()).doesNotContain(*accessors)
+        KrotoDCOptions.load("converterLocation=member,grpcDescriptors=true")
+        Assertions.assertThat(generatedGrpcCode()).contains(*accessors)
+        assertThrows<IllegalArgumentException> { KrotoDCOptions.load("grpcDescriptors=true") }
     }
 
     @Test

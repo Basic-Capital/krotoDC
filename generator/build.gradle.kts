@@ -103,6 +103,7 @@ protobuf {
                         option("converterLocation=member")
                         option("converterAnnotations=false")
                         option("allFieldDefaults=true")
+                        option("grpcDescriptors=true")
                     }
                     if (it.sourceSet.name == "explicitMemberTest") {
                         option("converterStyle=explicit")

@@ -54,7 +54,7 @@ class GrpcKrotoGenerator : FileSpecGenerator {
                     .addType(
                         TypeSpec.objectBuilder(krotoGrpcClassName)
                             .apply {
-                                if (KrotoDCOptions.memberConverters) {
+                                if (KrotoDCOptions.grpcDescriptors) {
                                     addServiceDescriptorMembers(this, service)
                                 }
                                 results.map {

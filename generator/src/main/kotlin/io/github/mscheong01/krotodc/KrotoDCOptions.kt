@@ -53,6 +53,13 @@ object KrotoDCOptions {
     val explicitConverters: Boolean
         get() = converterStyle == ConverterStyle.EXPLICIT
 
+    /**
+     * Give each `<Service>GrpcKroto` object `SERVICE_NAME`, `serviceDescriptor`, a `<method>Method` descriptor per
+     * method and `FullMethodNames` constants. Off by default. Requires `converterLocation=member`.
+     */
+    var grpcDescriptors: Boolean = false
+        private set
+
     /** Annotate converter functions with `@KrotoDCConverter`. */
     var converterAnnotations: Boolean = true
         private set
@@ -106,6 +113,10 @@ object KrotoDCOptions {
         require(converterStyle != ConverterStyle.EXPLICIT || converterLocation == ConverterLocation.MEMBER) {
             "converterStyle=explicit requires converterLocation=member"
         }
+        grpcDescriptors = options["grpcDescriptors"]?.toBooleanStrict() ?: false
+        require(!grpcDescriptors || converterLocation == ConverterLocation.MEMBER) {
+            "grpcDescriptors=true requires converterLocation=member"
+        }
     }
 
     private val knownOptions = setOf(
@@ -113,6 +124,7 @@ object KrotoDCOptions {
         "converterPackage",
         "converterLocation",
         "converterAnnotations",
-        "converterStyle"
+        "converterStyle",
+        "grpcDescriptors"
     )
 }
