@@ -18,6 +18,7 @@ import com.google.protobuf.compiler.PluginProtos
 import com.squareup.kotlinpoet.FileSpec
 import io.github.mscheong01.krotodc.specgenerators.file.ConverterGenerator
 import io.github.mscheong01.krotodc.specgenerators.file.DataClassGenerator
+import io.github.mscheong01.krotodc.specgenerators.file.ExtensionGenerator
 import io.github.mscheong01.krotodc.specgenerators.file.GrpcKrotoGenerator
 
 object KrotoDCCodeGenerator {
@@ -25,7 +26,8 @@ object KrotoDCCodeGenerator {
     val subGenerators = listOf(
         DataClassGenerator(),
         GrpcKrotoGenerator(),
-        ConverterGenerator()
+        ConverterGenerator(),
+        ExtensionGenerator()
     )
 
     fun generateCode(request: PluginProtos.CodeGeneratorRequest) {

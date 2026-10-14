@@ -35,6 +35,12 @@ interface KrotoDCMessage<P : Message> {
 
     /** Protobuf binary wire format, identical to `toProto().toByteString()`. */
     fun toByteString(): ByteString = toProto().toByteString()
+
+    /**
+     * This message as a protobuf runtime [Message], for code that walks descriptors and fields reflectively, such as
+     * redaction or logging. Today it is [toProto]; callers should rely only on the [Message] API.
+     */
+    fun toMessage(): Message = toProto()
 }
 
 /** Implemented by the companion object of every [KrotoDCMessage] data class. */
@@ -65,6 +71,17 @@ interface KrotoDCMessageCompanion<D : KrotoDCMessage<P>, P : Message> {
     /** The message's protobuf descriptor. `descriptor.file` is the descriptor of the `.proto` file that declares it. */
     val descriptor: Descriptors.Descriptor
         get() = newProtoBuilder().descriptorForType
+
+    /**
+     * Converts any runtime [Message] of this type, e.g. a [com.google.protobuf.DynamicMessage] or the result of
+     * [KrotoDCMessage.toMessage], through the binary wire format. Throws [IllegalArgumentException] if [message] has a
+     * different descriptor full name.
+     */
+    fun fromMessage(message: Message): D {
+        val messageType = message.descriptorForType.fullName
+        require(messageType == descriptor.fullName) { "Expected a ${descriptor.fullName} message but got $messageType" }
+        return parseFrom(message.toByteString())
+    }
 
     /** [fromProto] for callers that only know the message type at runtime. */
     @Suppress("UNCHECKED_CAST")

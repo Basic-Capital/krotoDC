@@ -43,6 +43,17 @@ val FileDescriptor.krotoDCPackage: String
 val FileDescriptor.simpleName: String
     get() = this.name.split('/').last().split('.').first()
 
+/** Name of the outer class protoc's Java generator emits for this file. */
+val FileDescriptor.javaOuterClassName: String
+    get() {
+        if (options.hasJavaOuterClassname()) {
+            return options.javaOuterClassname
+        }
+        val name = fieldNameToJsonName(simpleName).capitalize()
+        val topLevelNames = messageTypes.map { it.name } + enumTypes.map { it.name } + services.map { it.name }
+        return if (name in topLevelNames) name + "OuterClass" else name
+    }
+
 val Descriptor.protobufJavaTypeName: ClassName
     get() {
         var simpleNames = this.fullName
