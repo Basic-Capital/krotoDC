@@ -13,7 +13,6 @@
 // limitations under the License.
 package io.github.mscheong01.krotodc.specgenerators.file
 
-import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors
 import com.google.protobuf.Descriptors.Descriptor
 import com.google.protobuf.Descriptors.FileDescriptor
@@ -40,7 +39,6 @@ import io.github.mscheong01.krotodc.KrotoDC
 import io.github.mscheong01.krotodc.KrotoDCMessage
 import io.github.mscheong01.krotodc.KrotoDCMessageCompanion
 import io.github.mscheong01.krotodc.KrotoDCOptions
-import io.github.mscheong01.krotodc.KrotoJson
 import io.github.mscheong01.krotodc.import.CodeWithImports
 import io.github.mscheong01.krotodc.import.Import
 import io.github.mscheong01.krotodc.import.TypeSpecsWithImports
@@ -231,8 +229,9 @@ class DataClassGenerator : FileSpecGenerator {
     }
 
     /**
-     * Makes the data class a [KrotoDCMessage] with `toProto`/`toJson` members, and its companion a
-     * [KrotoDCMessageCompanion] that delegates to the top-level `toDataClass` extension and exposes the descriptor.
+     * Makes the data class a [KrotoDCMessage] with a `toProto` member, and its companion a [KrotoDCMessageCompanion]
+     * with `fromProto` (delegating to the top-level `toDataClass` extension) and `newProtoBuilder`. Everything else in
+     * those interfaces (JSON, binary, descriptor) is a default method built on these three, so it costs nothing per message.
      */
     private fun addMemberConverters(
         messageDescriptor: Descriptor,
@@ -246,14 +245,6 @@ class DataClassGenerator : FileSpecGenerator {
             it.funSpecs.forEach { funSpec -> dataClassBuilder.addFunction(funSpec) }
             imports.addAll(it.imports)
         }
-        dataClassBuilder.addFunction(
-            FunSpec.builder("toJson")
-                .addModifiers(KModifier.OVERRIDE)
-                .addParameter("includeDefaultValues", BOOLEAN)
-                .returns(STRING)
-                .addStatement("return %T.print(toProto(), includeDefaultValues)", KrotoJson::class)
-                .build()
-        )
         imports.add(messageDescriptor.toDataClassImport)
         val companion = TypeSpec.companionObjectBuilder()
             .addSuperinterface(
@@ -268,43 +259,15 @@ class DataClassGenerator : FileSpecGenerator {
                     .build()
             )
             .addFunction(
-                FunSpec.builder("fromJson")
-                    .addModifiers(KModifier.OVERRIDE)
-                    .addParameter("json", STRING)
-                    .returns(dataClassType)
-                    .addStatement(
-                        "return %T.merge(json, %T.newBuilder()).build().toDataClass()",
-                        KrotoJson::class,
-                        protoType
-                    )
-                    .build()
-            )
-            .addFunction(parseFromFunction(ByteArray::class.asClassName(), protoType, dataClassType))
-            .addFunction(parseFromFunction(ByteString::class.asClassName(), protoType, dataClassType))
-            .addFunction(
                 FunSpec.builder("newProtoBuilder")
                     .addModifiers(KModifier.OVERRIDE)
                     .returns(protoType.nestedClass("Builder"))
                     .addStatement("return %T.newBuilder()", protoType)
                     .build()
             )
-            .addProperty(
-                PropertySpec.builder("descriptor", Descriptor::class)
-                    .addModifiers(KModifier.OVERRIDE)
-                    .getter(FunSpec.getterBuilder().addStatement("return %T.getDescriptor()", protoType).build())
-                    .build()
-            )
             .build()
         dataClassBuilder.addType(companion)
     }
-
-    private fun parseFromFunction(bytesType: ClassName, protoType: ClassName, dataClassType: ClassName): FunSpec =
-        FunSpec.builder("parseFrom")
-            .addModifiers(KModifier.OVERRIDE)
-            .addParameter("bytes", bytesType)
-            .returns(dataClassType)
-            .addStatement("return %T.parseFrom(bytes).toDataClass()", protoType)
-            .build()
 
     /** The data class property type of [field] and its default value. */
     internal fun mapProtoTypeToKotlinTypeAndDefaultValue(field: Descriptors.FieldDescriptor): Pair<TypeName, CodeWithImports> {

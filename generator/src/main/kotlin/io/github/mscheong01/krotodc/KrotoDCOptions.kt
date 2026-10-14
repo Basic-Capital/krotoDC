@@ -34,9 +34,10 @@ object KrotoDCOptions {
 
     /**
      * Where `toProto`, `toJson` and `fromJson` go. `topLevel` (default) generates top-level extension functions;
-     * `member` makes them members of the data class and its companion, which implement [KrotoDCMessage] and
-     * [KrotoDCMessageCompanion] (which also adds binary `toByteArray`/`toByteString`/`parseFrom`). `toDataClass` stays
-     * a top-level extension either way.
+     * `member` generates only `toProto` on the data class and `fromProto`/`newProtoBuilder` on its companion, which
+     * implement [KrotoDCMessage] and [KrotoDCMessageCompanion]. Those interfaces supply JSON, binary
+     * (`toByteArray`/`toByteString`/`parseFrom`) and `descriptor` as default methods built on the three generated members.
+     * `toDataClass` stays a top-level extension either way.
      */
     var converterLocation: ConverterLocation = ConverterLocation.TOP_LEVEL
         private set

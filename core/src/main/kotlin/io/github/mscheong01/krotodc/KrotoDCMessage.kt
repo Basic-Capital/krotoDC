@@ -25,7 +25,7 @@ interface KrotoDCMessage<P : Message> {
     fun toProto(): P
 
     /** Canonical protobuf JSON. With [includeDefaultValues], fields without presence are printed and whitespace is omitted. */
-    fun toJson(includeDefaultValues: Boolean = false): String
+    fun toJson(includeDefaultValues: Boolean = false): String = KrotoJson.print(toProto(), includeDefaultValues)
 
     /** Protobuf JSON printed as [options] say, e.g. with proto field names or compact without defaults. */
     fun toJson(options: KrotoJsonOptions): String = KrotoJson.print(toProto(), options)
@@ -42,22 +42,29 @@ interface KrotoDCMessageCompanion<D : KrotoDCMessage<P>, P : Message> {
     fun fromProto(proto: P): D
 
     /** Parses protobuf JSON, ignoring unknown fields. */
-    fun fromJson(json: String): D
+    fun fromJson(json: String): D = fromProtoUnchecked(KrotoJson.merge(json, newProtoBuilder()).build())
 
     /** Parses protobuf JSON as [options] say; [KrotoJsonParseOptions.STRICT] rejects unknown fields. */
     fun fromJson(json: String, options: KrotoJsonParseOptions): D =
         fromProtoUnchecked(KrotoJson.merge(json, newProtoBuilder(), options).build())
 
-    /** Parses protobuf binary wire format. Throws [com.google.protobuf.InvalidProtocolBufferException] on malformed input. */
-    fun parseFrom(bytes: ByteArray): D
+    /**
+     * Parses protobuf binary wire format with the message's own parser, exactly like `Proto.parseFrom(bytes)`.
+     * Throws [com.google.protobuf.InvalidProtocolBufferException] on malformed input.
+     */
+    fun parseFrom(bytes: ByteArray): D = fromProtoUnchecked(newProtoBuilder().defaultInstanceForType.parserForType.parseFrom(bytes))
 
-    /** Parses protobuf binary wire format. Throws [com.google.protobuf.InvalidProtocolBufferException] on malformed input. */
-    fun parseFrom(bytes: ByteString): D
+    /**
+     * Parses protobuf binary wire format with the message's own parser, exactly like `Proto.parseFrom(bytes)`.
+     * Throws [com.google.protobuf.InvalidProtocolBufferException] on malformed input.
+     */
+    fun parseFrom(bytes: ByteString): D = fromProtoUnchecked(newProtoBuilder().defaultInstanceForType.parserForType.parseFrom(bytes))
 
     fun newProtoBuilder(): Message.Builder
 
     /** The message's protobuf descriptor. `descriptor.file` is the descriptor of the `.proto` file that declares it. */
     val descriptor: Descriptors.Descriptor
+        get() = newProtoBuilder().descriptorForType
 
     /** [fromProto] for callers that only know the message type at runtime. */
     @Suppress("UNCHECKED_CAST")
