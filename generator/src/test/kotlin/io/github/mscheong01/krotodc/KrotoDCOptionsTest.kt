@@ -19,6 +19,7 @@ import com.google.protobuf.Descriptors
 import com.google.protobuf.compiler.PluginProtos
 import io.github.mscheong01.krotodc.specgenerators.file.ConverterGenerator
 import io.github.mscheong01.krotodc.specgenerators.file.DataClassGenerator
+import io.github.mscheong01.krotodc.specgenerators.file.ExtensionGenerator
 import io.github.mscheong01.krotodc.specgenerators.file.GrpcKrotoGenerator
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.AfterEach
@@ -173,6 +174,31 @@ class KrotoDCOptionsTest {
         KrotoDCOptions.load("converterLocation=member,grpcDescriptors=true")
         Assertions.assertThat(generatedGrpcCode()).contains(*accessors)
         assertThrows<IllegalArgumentException> { KrotoDCOptions.load("grpcDescriptors=true") }
+    }
+
+    @Test
+    fun `extension accessors are generated only with extensionAccessors=true`() {
+        val extension = DescriptorProtos.FieldDescriptorProto.newBuilder()
+            .setName("audited")
+            .setNumber(50001)
+            .setType(DescriptorProtos.FieldDescriptorProto.Type.TYPE_BOOL)
+            .setLabel(DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL)
+            .setExtendee(".google.protobuf.MethodOptions")
+            .build()
+        val fileProto = DescriptorProtos.FileDescriptorProto.newBuilder()
+            .setName("extension_test.proto")
+            .setPackage("extensiontest")
+            .setSyntax("proto3")
+            .addDependency("google/protobuf/descriptor.proto")
+            .addExtension(extension)
+            .build()
+        val fileDescriptor = Descriptors.FileDescriptor.buildFrom(fileProto, arrayOf(DescriptorProtos.getDescriptor()))
+        KrotoDCOptions.load("converterLocation=member")
+        Assertions.assertThat(ExtensionGenerator().generate(fileDescriptor)).isEmpty()
+        KrotoDCOptions.load("converterLocation=member,extensionAccessors=true")
+        Assertions.assertThat(ExtensionGenerator().generate(fileDescriptor).joinToString("\n") { it.toString() })
+            .contains("object ExtensionTestKroto", "audited")
+        assertThrows<IllegalArgumentException> { KrotoDCOptions.load("extensionAccessors=true") }
     }
 
     @Test

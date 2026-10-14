@@ -104,6 +104,7 @@ protobuf {
                         option("converterAnnotations=false")
                         option("allFieldDefaults=true")
                         option("grpcDescriptors=true")
+                        option("extensionAccessors=true")
                     }
                     if (it.sourceSet.name == "explicitMemberTest") {
                         option("converterStyle=explicit")

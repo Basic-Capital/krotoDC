@@ -60,6 +60,13 @@ object KrotoDCOptions {
     var grpcDescriptors: Boolean = false
         private set
 
+    /**
+     * Generate `object <OuterClassName>Kroto` with the file descriptor and a `KrotoDCExtension` per custom option for
+     * each `.proto` file that declares extensions. Off by default. Requires `converterLocation=member`.
+     */
+    var extensionAccessors: Boolean = false
+        private set
+
     /** Annotate converter functions with `@KrotoDCConverter`. */
     var converterAnnotations: Boolean = true
         private set
@@ -117,6 +124,10 @@ object KrotoDCOptions {
         require(!grpcDescriptors || converterLocation == ConverterLocation.MEMBER) {
             "grpcDescriptors=true requires converterLocation=member"
         }
+        extensionAccessors = options["extensionAccessors"]?.toBooleanStrict() ?: false
+        require(!extensionAccessors || converterLocation == ConverterLocation.MEMBER) {
+            "extensionAccessors=true requires converterLocation=member"
+        }
     }
 
     private val knownOptions = setOf(
@@ -125,6 +136,7 @@ object KrotoDCOptions {
         "converterLocation",
         "converterAnnotations",
         "converterStyle",
-        "grpcDescriptors"
+        "grpcDescriptors",
+        "extensionAccessors"
     )
 }

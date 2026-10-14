@@ -40,14 +40,14 @@ import io.github.mscheong01.krotodc.util.krotoDCPackage
 import io.github.mscheong01.krotodc.util.protobufJavaTypeName
 
 /**
- * In member mode, generates `object <OuterClassName>Kroto` for each `.proto` file that declares top-level extensions,
- * with the file's descriptor and a [KrotoDCExtension] per scalar or enum extension. Callers then read custom options
- * without importing protoc's outer class. Message-typed extensions aren't exposed: their values would be protoc Java
- * messages.
+ * With `extensionAccessors=true`, generates `object <OuterClassName>Kroto` for each `.proto` file that declares
+ * top-level extensions, with the file's descriptor and a [KrotoDCExtension] per scalar or enum extension. Callers then
+ * read custom options without importing protoc's outer class. Message-typed extensions aren't exposed: their values
+ * would be protoc Java messages.
  */
 class ExtensionGenerator : FileSpecGenerator {
     override fun generate(fileDescriptor: Descriptors.FileDescriptor): List<FileSpec> {
-        if (!KrotoDCOptions.memberConverters || fileDescriptor.extensions.isEmpty()) {
+        if (!KrotoDCOptions.extensionAccessors || fileDescriptor.extensions.isEmpty()) {
             return emptyList()
         }
         val outerClass = ClassName(fileDescriptor.javaPackageForOuterClass, fileDescriptor.javaOuterClassName)
