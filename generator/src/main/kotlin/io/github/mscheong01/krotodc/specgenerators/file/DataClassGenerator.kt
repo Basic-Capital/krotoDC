@@ -221,6 +221,9 @@ class DataClassGenerator : FileSpecGenerator {
         if (KrotoDCOptions.memberConverters) {
             addMemberConverters(messageDescriptor, dataClassBuilder, imports)
         } else {
+            if (KrotoDCOptions.fieldAccessors) {
+                FieldAccessorsGenerator(this).addFieldAccessors(messageDescriptor, dataClassBuilder, null, imports)
+            }
             dataClassBuilder.addType(TypeSpec.companionObjectBuilder().build())
         }
         return TypeSpecsWithImports(

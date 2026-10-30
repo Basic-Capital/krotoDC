@@ -110,6 +110,13 @@ protobuf {
                     if (it.sourceSet.name == "explicitMemberTest") {
                         option("converterStyle=explicit")
                     }
+                    if (it.sourceSet.name == "topLevelTest") {
+                        option("allFieldDefaults=true")
+                        option("fieldAccessors=true")
+                    }
+                    if (it.sourceSet.name == "topLevelNoDefaultsTest") {
+                        option("fieldAccessors=true")
+                    }
                 }
             }
         }
@@ -152,6 +159,43 @@ val explicitMemberTestTask = tasks.register<Test>("explicitMemberTest") {
     useJUnitPlatform()
 }
 
+// The memberTest protos generated with the default top-level converters, allFieldDefaults=true and fieldAccessors=true.
+val topLevelTest: SourceSet by sourceSets.creating {
+    (extensions.getByName("proto") as SourceDirectorySet).srcDir("src/memberTest/proto")
+}
+configurations[topLevelTest.implementationConfigurationName].extendsFrom(
+    configurations.implementation.get(),
+    configurations.testImplementation.get()
+)
+configurations[topLevelTest.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+
+val topLevelTestTask = tasks.register<Test>("topLevelTest") {
+    description = "Runs tests against code generated with top-level converters and fieldAccessors=true."
+    group = "verification"
+    testClassesDirs = topLevelTest.output.classesDirs
+    classpath = topLevelTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
+// The memberTest and test protos generated with top-level converters and fieldAccessors=true, without allFieldDefaults.
+val topLevelNoDefaultsTest: SourceSet by sourceSets.creating {
+    (extensions.getByName("proto") as SourceDirectorySet).srcDir("src/memberTest/proto")
+    (extensions.getByName("proto") as SourceDirectorySet).srcDir("src/test/proto")
+}
+configurations[topLevelNoDefaultsTest.implementationConfigurationName].extendsFrom(
+    configurations.implementation.get(),
+    configurations.testImplementation.get()
+)
+configurations[topLevelNoDefaultsTest.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+
+val topLevelNoDefaultsTestTask = tasks.register<Test>("topLevelNoDefaultsTest") {
+    description = "Runs tests against code generated with top-level converters and fieldAccessors=true only."
+    group = "verification"
+    testClassesDirs = topLevelNoDefaultsTest.output.classesDirs
+    classpath = topLevelNoDefaultsTest.runtimeClasspath
+    useJUnitPlatform()
+}
+
 tasks.check {
-    dependsOn(memberTestTask, explicitMemberTestTask)
+    dependsOn(memberTestTask, explicitMemberTestTask, topLevelTestTask, topLevelNoDefaultsTestTask)
 }

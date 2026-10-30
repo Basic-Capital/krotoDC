@@ -90,6 +90,13 @@ class MemberFieldAccessorsTest {
                     descriptor.takeIf { it.javaType == Descriptors.FieldDescriptor.JavaType.MESSAGE && !it.isMapField }
                         ?.messageType?.takeIf { !it.file.name.startsWith("google/") }
                 )
+                // messageFields is set exactly where messageCompanion is, and leads to the same list.
+                val companionFields = field.messageCompanion?.fields
+                if (companionFields == null) {
+                    Assertions.assertThat(field.messageFields as Any?).describedAs(field.name).isNull()
+                } else {
+                    Assertions.assertThat(field.messageFields!!()).describedAs(field.name).isEqualTo(companionFields)
+                }
             }
         }
     }
@@ -388,6 +395,9 @@ class MemberFieldAccessorsTest {
         Assertions.assertThat(Folder.Fields.readme.messageCompanion).isSameAs(Document.Companion)
         Assertions.assertThat(Document.Fields.parent.messageCompanion).isSameAs(Folder.Companion)
         Assertions.assertThat(Document.Fields.links.messageCompanion).isSameAs(Folder.Companion)
+        Assertions.assertThat(Folder.Fields.documents.messageFields!!()).isSameAs(Document.Fields.all)
+        Assertions.assertThat(Document.Fields.parent.messageFields!!()).isSameAs(Folder.fields)
+        Assertions.assertThat(Catalog.KrotoFields.fields.messageFields!!()).isSameAs(Catalog.Fields.KrotoFields.all)
         val tree = Folder(name = "root", documents = listOf(Document(title = "a", links = listOf(Folder(name = "sub")))))
         Assertions.assertThat(walk(Folder, tree)).containsExactly("Folder.name", "Folder.documents", "Document.title", "Document.links", "Folder.name")
     }
@@ -444,7 +454,12 @@ class MemberFieldAccessorsTest {
                 for (fields in results) {
                     val messageFields = fields.filter { invoke(it, "getKind").toString() == "MESSAGE" }
                     Assertions.assertThat(messageFields).hasSize(2)
-                    messageFields.forEach { Assertions.assertThat(invoke(it, "getMessageCompanion")).isNotNull }
+                    messageFields.forEach {
+                        Assertions.assertThat(invoke(it, "getMessageCompanion")).isNotNull
+                        val nested = loader.loadClass("kotlin.jvm.functions.Function0").getMethod("invoke")
+                            .invoke(invoke(it, "getMessageFields")) as List<*>
+                        Assertions.assertThat(nested).hasSize(3).doesNotContainNull()
+                    }
                 }
                 loader.close()
             }

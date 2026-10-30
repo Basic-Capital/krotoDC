@@ -69,8 +69,8 @@ object KrotoDCOptions {
 
     /**
      * Give each data class a nested `Fields` object (`KrotoFields` if the message has a nested type named `Fields`)
-     * with a typed `KrotoDCField` per proto field, listed in order by the companion's `fields`. Off by default.
-     * Requires `converterLocation=member`.
+     * with a typed `KrotoDCField` per proto field and an `all` list of them in declaration order, which the companion's
+     * `fields` also returns with `converterLocation=member`. Off by default. Works with either converter location.
      */
     var fieldAccessors: Boolean = false
         private set
@@ -137,9 +137,6 @@ object KrotoDCOptions {
             "extensionAccessors=true requires converterLocation=member"
         }
         fieldAccessors = options["fieldAccessors"]?.toBooleanStrict() ?: false
-        require(!fieldAccessors || converterLocation == ConverterLocation.MEMBER) {
-            "fieldAccessors=true requires converterLocation=member"
-        }
     }
 
     private val knownOptions = setOf(

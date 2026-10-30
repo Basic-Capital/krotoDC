@@ -60,8 +60,8 @@ protobuf {
 
 ## Field accessors (`fieldAccessors=true`)
 
-With `option("converterLocation=member")` and `option("fieldAccessors=true")`, every data class gets a typed,
-reflection-free list of its proto fields. Off by default; the option is rejected without `converterLocation=member`.
+With `option("fieldAccessors=true")`, every data class gets a typed, reflection-free list of its proto fields. Off by
+default, and without it the generated code is unchanged. It works with either converter location.
 
 ```kotlin
 // message Ledger { string id = 1; optional int32 limit = 2; repeated Owner owners = 3; oneof contact { string email = 4; } }
@@ -70,20 +70,27 @@ field.get(ledger)            // String?
 field.has(ledger)            // proto semantics, see below
 field.set(ledger, "L-1")     // a copy; set(ledger, null) clears
 
-for (f in Ledger.fields) println("${f.number} ${f.jsonName} ${f.kind} ${f.cardinality}")  // KrotoDCMessageCompanion.fields
+for (f in Ledger.Fields.all) println("${f.number} ${f.jsonName} ${f.kind} ${f.cardinality}")
+// With converterLocation=member, the companion returns the same list: Ledger.fields (KrotoDCMessageCompanion.fields)
 ```
 
-- `Ledger.Fields` holds one `@JvmField val <propertyName>: KrotoDCField<Ledger, V>` per field. If the message already has
-  a nested type named `Fields` (a nested message, or a oneof named `fields`) or is itself named `Fields`, the object is
-  `KrotoFields` instead (then `KrotoFields2`, ...).
-- `Ledger.fields` (the companion's `KrotoDCMessageCompanion.fields`) lists them in proto declaration order, oneof members
-  in place. It is empty for messages without fields and for code generated without the option.
+- `Ledger.Fields` holds one `@JvmField val <propertyName>: KrotoDCField<Ledger, V>` per field, and `all`, a list of them
+  in proto declaration order with oneof members in place (`all_` if a field is named `all`). Messages without fields
+  get no object. If the message already has a nested type named `Fields` (a nested message, or a oneof named `fields`)
+  or is itself named `Fields`, the object is `KrotoFields` instead (then `KrotoFields2`, ...).
+- With `converterLocation=member`, `Ledger.fields` (the companion's `KrotoDCMessageCompanion.fields`) returns
+  `Ledger.Fields.all`; it is empty for messages without fields and for code generated without the option. With the
+  default top-level converters there is no companion interface, so `Fields.all` is the entry point.
+- `KrotoDCField<D : Any, V : Any>`: `D` is the data class, which only implements `KrotoDCMessage` in member mode.
 - `V` is the property type without nullability: Kotlin scalars, `ByteString`, the protoc Java enum, the generated data
   class, `List<T>`, `Map<K, V>`, and the mapped type for well-known types (`LocalDateTime`, `java.time.Duration`,
   `Int` for `Int32Value`, `Unit` for `Empty`, the protoc Java class for e.g. `Any`). For a oneof member, the case's value.
 - `kind` is the protobuf Java type (element type for repeated fields), so map fields and every well-known type are
-  `MESSAGE`. `messageCompanion` is the generated companion for `MESSAGE` fields backed by a data class (elements for
-  repeated), and null for maps and well-known types.
+  `MESSAGE`.
+- `messageFields`, for `MESSAGE` fields backed by a data class (elements for repeated), is a function returning that
+  data class's `Fields.all` (empty if it has no fields), so code can recurse into nested messages in either mode; null
+  for other kinds, maps and well-known types. `messageCompanion` is the generated companion for the same fields with
+  `converterLocation=member`, and always null with top-level converters.
 - `cardinality`: `OPTIONAL` for nullable properties (`optional`, wrapper types) and oneof members; `IMPLICIT` for other
   singular fields, including message fields, which krotoDC gives a non-null default; `REPEATED`; `MAP`.
 - `has`: `OPTIONAL` when non-null (oneof member: its case is selected); `IMPLICIT` when different from the default
@@ -92,8 +99,11 @@ for (f in Ledger.fields) println("${f.number} ${f.jsonName} ${f.kind} ${f.cardin
 - `set(m, null)`: `OPTIONAL` becomes null, `IMPLICIT` takes the constructor's default (a message converted from the proto
   default instance when `allFieldDefaults` is off), collections become empty; a oneof member clears the oneof only if
   its own case is selected.
-- The companion's `fields` is a getter onto the `Fields` object, so accessors are built on first use and mutually
-  recursive messages can't deadlock or observe a null companion during class initialization.
+- Accessors are built on first use of the `Fields` object (the companion's `fields` is a getter onto it), and
+  `messageFields` is a lambda, so mutually recursive messages can't deadlock or observe a null during class
+  initialization.
+- Generate every file that references another file's messages with the same `fieldAccessors` setting: `messageFields`
+  refers to the other message's `Fields` object.
 
 ## Snapshot Versions
 krotoDC provides snapshot versions that are automatically released when changes are pushed to the main branch. 

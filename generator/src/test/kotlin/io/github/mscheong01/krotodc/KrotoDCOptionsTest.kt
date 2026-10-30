@@ -207,11 +207,24 @@ class KrotoDCOptionsTest {
         KrotoDCOptions.load("converterLocation=member")
         Assertions.assertThat(generatedMemberCode()).doesNotContain(*accessors)
         KrotoDCOptions.load("converterLocation=member,fieldAccessors=true")
+        Assertions.assertThat(KrotoDCOptions.fieldAccessors).isTrue
         Assertions.assertThat(generatedMemberCode()).contains(*accessors)
         KrotoDCOptions.load("converterLocation=member,converterStyle=explicit,fieldAccessors=true")
         Assertions.assertThat(generatedMemberCode()).contains(*accessors)
-        assertThrows<IllegalArgumentException> { KrotoDCOptions.load("fieldAccessors=true") }
-            .also { Assertions.assertThat(it.message).isEqualTo("fieldAccessors=true requires converterLocation=member") }
+    }
+
+    @Test
+    fun `fieldAccessors=true works with top-level converters, without a companion override`() {
+        KrotoDCOptions.load("")
+        Assertions.assertThat(generatedMemberCode()).doesNotContain("object Fields", "KrotoDCField")
+        for (options in listOf("fieldAccessors=true", "converterLocation=topLevel,fieldAccessors=true,allFieldDefaults=true")) {
+            KrotoDCOptions.load(options)
+            Assertions.assertThat(KrotoDCOptions.fieldAccessors).isTrue
+            Assertions.assertThat(KrotoDCOptions.memberConverters).isFalse
+            Assertions.assertThat(generatedMemberCode())
+                .contains("object Fields", "KrotoDCField<", "@JvmField", "public val all: List<KrotoDCField<DefaultValueTest, *>>")
+                .doesNotContain("override val fields", "KrotoDCMessage", ".Companion,", "fromProto")
+        }
     }
 
     @Test
@@ -229,6 +242,16 @@ class KrotoDCOptionsTest {
         KrotoDCOptions.load("converterLocation=member,fieldAccessors=true,allFieldDefaults=true")
         Assertions.assertThat(generatedMemberCode())
             .contains("m.copy(defaultValueNestedMessage = v ?: com.example.defaultvaluestest.krotodc.DefaultValueNestedMessage())")
+        // Top-level converters have no companion fromProto, so the default instance goes through toDataClass.
+        KrotoDCOptions.load("fieldAccessors=true")
+        Assertions.assertThat(generatedMemberCode())
+            .doesNotContain("::class.java", "kotlin.reflect", "by lazy")
+            .contains("import com.example.defaultvaluestest.krotodc.defaultvaluenestedmessage.toDataClass")
+            .contains(
+                "{ m: DefaultValueTest, v: DefaultValueNestedMessage? -> m.copy(defaultValueNestedMessage = v ?: " +
+                    "DefaultValuesTest.DefaultValueNestedMessage.getDefaultInstance().toDataClass()) }"
+            )
+            .contains("{ DefaultValueNestedMessage.Fields.all }")
     }
 
     @Test

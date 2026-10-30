@@ -74,7 +74,7 @@ interface KrotoDCMessageCompanion<D : KrotoDCMessage<P>, P : Message> {
 
     /**
      * The message's fields in proto declaration order, oneof members in place, as typed reflection-free accessors.
-     * Generated with the `fieldAccessors=true` plugin option; empty otherwise.
+     * Generated with the `fieldAccessors=true` plugin option, returning the data class's `Fields.all`; empty otherwise.
      */
     val fields: List<KrotoDCField<D, *>>
         get() = emptyList()
