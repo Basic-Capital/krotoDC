@@ -202,6 +202,42 @@ class KrotoDCOptionsTest {
     }
 
     @Test
+    fun `field accessors are generated only with fieldAccessors=true`() {
+        val accessors = arrayOf("object Fields", "KrotoDCField<", "override val fields")
+        KrotoDCOptions.load("converterLocation=member")
+        Assertions.assertThat(generatedMemberCode()).doesNotContain(*accessors)
+        KrotoDCOptions.load("converterLocation=member,fieldAccessors=true")
+        Assertions.assertThat(generatedMemberCode()).contains(*accessors)
+        KrotoDCOptions.load("converterLocation=member,converterStyle=explicit,fieldAccessors=true")
+        Assertions.assertThat(generatedMemberCode()).contains(*accessors)
+        assertThrows<IllegalArgumentException> { KrotoDCOptions.load("fieldAccessors=true") }
+            .also { Assertions.assertThat(it.message).isEqualTo("fieldAccessors=true requires converterLocation=member") }
+    }
+
+    @Test
+    fun `field accessors are plain code and reset messages without needing constructor defaults`() {
+        KrotoDCOptions.load("converterLocation=member,fieldAccessors=true")
+        val code = generatedMemberCode()
+        Assertions.assertThat(code)
+            .doesNotContain("::class.java", "kotlin.reflect", "by lazy")
+            .contains("{ m: DefaultValueTest -> m.intField }")
+            .contains("{ m: DefaultValueTest -> m.stringList.isNotEmpty() }")
+            .contains(
+                "{ m: DefaultValueTest, v: DefaultValueNestedMessage? -> m.copy(defaultValueNestedMessage = v ?: " +
+                    "DefaultValueNestedMessage.fromProto(DefaultValuesTest.DefaultValueNestedMessage.getDefaultInstance())) }"
+            )
+        KrotoDCOptions.load("converterLocation=member,fieldAccessors=true,allFieldDefaults=true")
+        Assertions.assertThat(generatedMemberCode())
+            .contains("m.copy(defaultValueNestedMessage = v ?: com.example.defaultvaluestest.krotodc.DefaultValueNestedMessage())")
+    }
+
+    @Test
+    fun `unknown option error lists every known option`() {
+        val error = assertThrows<IllegalArgumentException> { KrotoDCOptions.load("fieldAccessor=true") }
+        Assertions.assertThat(error.message).contains("fieldAccessors", "extensionAccessors", "grpcDescriptors")
+    }
+
+    @Test
     fun `converterStyle=explicit requires member converters and unknown styles are rejected`() {
         assertThrows<IllegalArgumentException> { KrotoDCOptions.load("converterStyle=explicit") }
         assertThrows<IllegalArgumentException> { KrotoDCOptions.load("converterLocation=member,converterStyle=fancy") }

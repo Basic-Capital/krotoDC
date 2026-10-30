@@ -73,6 +73,13 @@ interface KrotoDCMessageCompanion<D : KrotoDCMessage<P>, P : Message> {
         get() = newProtoBuilder().descriptorForType
 
     /**
+     * The message's fields in proto declaration order, oneof members in place, as typed reflection-free accessors.
+     * Generated with the `fieldAccessors=true` plugin option; empty otherwise.
+     */
+    val fields: List<KrotoDCField<D, *>>
+        get() = emptyList()
+
+    /**
      * Converts any runtime [Message] of this type, e.g. a [com.google.protobuf.DynamicMessage] or the result of
      * [KrotoDCMessage.toMessage], through the binary wire format. Throws [IllegalArgumentException] if [message] has a
      * different descriptor full name.

@@ -45,6 +45,7 @@ import io.github.mscheong01.krotodc.import.TypeSpecsWithImports
 import io.github.mscheong01.krotodc.predefinedtypes.HandledPreDefinedType
 import io.github.mscheong01.krotodc.specgenerators.FileSpecGenerator
 import io.github.mscheong01.krotodc.specgenerators.function.MessageToProtoFunctionGenerator
+import io.github.mscheong01.krotodc.specgenerators.type.FieldAccessorsGenerator
 import io.github.mscheong01.krotodc.util.MAP_ENTRY_KEY_FIELD_NUMBER
 import io.github.mscheong01.krotodc.util.MAP_ENTRY_VALUE_FIELD_NUMBER
 import io.github.mscheong01.krotodc.util.addAllImports
@@ -232,6 +233,7 @@ class DataClassGenerator : FileSpecGenerator {
      * Makes the data class a [KrotoDCMessage] with a `toProto` member, and its companion a [KrotoDCMessageCompanion]
      * with `fromProto` (delegating to the top-level `toDataClass` extension) and `newProtoBuilder`. Everything else in
      * those interfaces (JSON, binary, descriptor) is a default method built on these three, so it costs nothing per message.
+     * With `fieldAccessors=true` the data class also gets a `Fields` object and the companion overrides `fields`.
      */
     private fun addMemberConverters(
         messageDescriptor: Descriptor,
@@ -265,8 +267,10 @@ class DataClassGenerator : FileSpecGenerator {
                     .addStatement("return %T.newBuilder()", protoType)
                     .build()
             )
-            .build()
-        dataClassBuilder.addType(companion)
+        if (KrotoDCOptions.fieldAccessors) {
+            FieldAccessorsGenerator(this).addFieldAccessors(messageDescriptor, dataClassBuilder, companion, imports)
+        }
+        dataClassBuilder.addType(companion.build())
     }
 
     /** The data class property type of [field] and its default value. */
